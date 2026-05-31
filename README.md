@@ -1,4 +1,4 @@
-[RSSlezer.html](https://github.com/user-attachments/files/28435672/RSSlezer.html)
+[lezer.html](https://github.com/user-attachments/files/28435727/lezer.html)
 <!DOCTYPE html>
 <html lang="nl">
 <head>
