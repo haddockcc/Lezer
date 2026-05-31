@@ -1,1 +1,1266 @@
-# Lezer
+[RSSlezer.html](https://github.com/user-attachments/files/28435144/RSSlezer.html)
+# Lezer<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lezer — Slimme RSS-reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --sidebar-w: 230px;
+  --accent: #c0392b;
+  --bg: #f4f2ee;
+  --surface: #ffffff;
+  --border: rgba(0,0,0,0.09);
+  --text: #1a1a18;
+  --muted: #6b6b68;
+  --tag-bg: #fdf0ef;
+  --cluster-bg: #fffbf0;
+  --cluster-border: #e8d48a;
+  --serif: 'Playfair Display', Georgia, serif;
+  --sans: 'Inter', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161614; --surface: #1f1f1d; --border: rgba(255,255,255,0.07);
+    --text: #ede9e2; --muted: #8a8a86; --tag-bg: #2a1815;
+    --cluster-bg: #201e10; --cluster-border: #6a5a20;
+  }
+}
+body { font-family: var(--sans); background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 14px; }
+
+/* Sidebar */
+#sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+#sidebar-header { padding: 18px 16px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+#sidebar-logo { font-family: var(--serif); font-size: 20px; font-weight: 900; letter-spacing: -0.5px; color: var(--accent); flex: 1; }
+.sidebar-section { padding: 4px 0; }
+.sidebar-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 8px 14px 4px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+.sidebar-label button { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 0; line-height: 1; }
+.sidebar-label button:hover { color: var(--accent); }
+.sidebar-item { display: flex; align-items: center; gap: 7px; padding: 6px 14px; cursor: pointer; font-size: 12px; color: var(--text); transition: background 0.1s; user-select: none; }
+.sidebar-item:hover { background: var(--bg); }
+.sidebar-item.active { background: var(--tag-bg); color: var(--accent); font-weight: 600; }
+.sidebar-item i { font-size: 14px; flex-shrink: 0; }
+.sidebar-item .count { margin-left: auto; background: var(--bg); color: var(--muted); font-size: 10px; padding: 1px 5px; border-radius: 8px; flex-shrink: 0; }
+.sidebar-divider { height: 1px; background: var(--border); margin: 2px 0; }
+
+/* Category group */
+.cat-group { }
+.cat-header { display: flex; align-items: center; gap: 6px; padding: 5px 14px; cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text); transition: background 0.1s; }
+.cat-header:hover { background: var(--bg); }
+.cat-header.active { color: var(--accent); }
+.cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cat-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-chevron { font-size: 11px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
+.cat-chevron.open { transform: rotate(180deg); }
+.cat-count { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.cat-feeds { display: none; }
+.cat-feeds.open { display: block; }
+.cat-feed-item { display: flex; align-items: center; gap: 6px; padding: 5px 14px 5px 28px; font-size: 11px; color: var(--muted); cursor: pointer; transition: background 0.1s; }
+.cat-feed-item:hover { background: var(--bg); color: var(--text); }
+.cat-feed-item.active { color: var(--accent); font-weight: 600; }
+.cat-feed-item.drag-over { background: var(--tag-bg); outline: 1px dashed var(--accent); }
+.feed-favicon { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; }
+
+/* Drag states */
+.cat-header.drag-over { background: var(--tag-bg); outline: 1px dashed var(--accent); border-radius: 4px; }
+.dragging { opacity: 0.4; }
+
+.add-feed-btn { margin: 8px 10px 10px; padding: 7px 12px; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 11px; font-family: var(--sans); cursor: pointer; display: flex; align-items: center; gap: 5px; font-weight: 500; transition: opacity 0.15s; }
+.add-feed-btn:hover { opacity: 0.85; }
+
+/* Main */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#topbar { padding: 11px 18px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#topbar h2 { font-family: var(--serif); font-size: 17px; font-weight: 700; flex: 1; letter-spacing: -0.3px; }
+.topbar-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.15s; white-space: nowrap; font-family: var(--sans); }
+.topbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+.topbar-btn.active { background: var(--tag-bg); border-color: var(--accent); color: var(--accent); }
+.topbar-btn i { font-size: 12px; }
+
+#feed-list { flex: 1; overflow-y: auto; padding: 18px; }
+.magazine-grid { display: grid; gap: 14px; }
+.magazine-grid.view-magazine { grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+.magazine-grid.view-list { grid-template-columns: 1fr; gap: 0; }
+
+/* Hero */
+.hero-card { grid-column: 1/-1; position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; height: 320px; background: #1a1a18; }
+.hero-card .hero-img { width:100%; height:100%; object-fit:cover; opacity:0.7; transition: opacity 0.3s, transform 0.4s; }
+.hero-card:hover .hero-img { opacity:0.58; transform:scale(1.02); }
+.hero-placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+.hero-overlay { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,0.88) 0%,rgba(0,0,0,0.15) 55%,transparent 100%); display:flex; flex-direction:column; justify-content:flex-end; padding:22px 26px; }
+.hero-source { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.65); margin-bottom:7px; }
+.hero-title { font-family:var(--serif); font-size:24px; font-weight:900; line-height:1.25; color:#fff; margin-bottom:8px; }
+.hero-desc { font-size:12px; color:rgba(255,255,255,0.72); line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.hero-meta { font-size:11px; color:rgba(255,255,255,0.45); margin-top:10px; }
+.hero-unread-dot { width:6px; height:6px; background:var(--accent); border-radius:50%; display:inline-block; margin-right:5px; vertical-align:middle; }
+
+/* Mag card */
+.mag-card { background:var(--surface); border-radius:10px; overflow:hidden; cursor:pointer; border:1px solid var(--border); transition:transform 0.15s,border-color 0.15s; display:flex; flex-direction:column; }
+.mag-card:hover { transform:translateY(-2px); border-color:rgba(192,57,43,0.25); }
+.mag-card.unread { border-left:3px solid var(--accent); }
+.mag-card-img-wrap { height:150px; overflow:hidden; background:var(--bg); flex-shrink:0; }
+.mag-card-img { width:100%; height:100%; object-fit:cover; transition:transform 0.4s; }
+.mag-card:hover .mag-card-img { transform:scale(1.04); }
+.mag-card-placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:32px; }
+.mag-card-body { padding:11px 13px 13px; flex:1; display:flex; flex-direction:column; }
+.mag-card-meta { display:flex; align-items:center; gap:5px; margin-bottom:5px; }
+.mag-source { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; }
+.mag-dot { width:2px; height:2px; background:var(--muted); border-radius:50%; }
+.mag-time { font-size:10px; color:var(--muted); }
+.mag-title { font-family:var(--serif); font-size:14px; font-weight:700; line-height:1.35; flex:1; }
+.mag-desc { font-size:11px; color:var(--muted); line-height:1.45; margin-top:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* List card */
+/* List density variables — overridden per density class on #feed-list */
+#feed-list {
+  --lc-pad: 12px 2px;
+  --lc-gap: 12px;
+  --lc-thumb-w: 68px;
+  --lc-thumb-h: 50px;
+  --lc-thumb-ph-fs: 18px;
+  --lc-title-fs: 13px;
+  --lc-title-lh: 1.35;
+  --lc-desc-fs: 11px;
+  --lc-desc-clamp: 1;
+  --lc-meta-fs: 9px;
+}
+#feed-list.density-comfortable {
+  --lc-pad: 18px 4px;
+  --lc-gap: 16px;
+  --lc-thumb-w: 100px;
+  --lc-thumb-h: 72px;
+  --lc-thumb-ph-fs: 26px;
+  --lc-title-fs: 17px;
+  --lc-title-lh: 1.45;
+  --lc-desc-fs: 13px;
+  --lc-desc-clamp: 2;
+  --lc-meta-fs: 11px;
+}
+#feed-list.density-spacious {
+  --lc-pad: 24px 4px;
+  --lc-gap: 20px;
+  --lc-thumb-w: 130px;
+  --lc-thumb-h: 94px;
+  --lc-thumb-ph-fs: 32px;
+  --lc-title-fs: 21px;
+  --lc-title-lh: 1.5;
+  --lc-desc-fs: 15px;
+  --lc-desc-clamp: 3;
+  --lc-meta-fs: 12px;
+}
+.list-card { background:var(--surface); cursor:pointer; border-bottom:1px solid var(--border); display:flex; gap:var(--lc-gap); align-items:flex-start; padding:var(--lc-pad); transition:background 0.1s; }
+.list-card:hover { background:var(--bg); }
+.list-card-thumb { width:var(--lc-thumb-w); height:var(--lc-thumb-h); border-radius:6px; object-fit:cover; flex-shrink:0; transition: width 0.2s, height 0.2s; }
+.list-card-thumb-ph { width:var(--lc-thumb-w); height:var(--lc-thumb-h); border-radius:6px; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:var(--lc-thumb-ph-fs); color:var(--border); transition: width 0.2s, height 0.2s; }
+.list-card-body { flex:1; min-width:0; }
+.list-card-title { font-family:var(--serif); font-size:var(--lc-title-fs); line-height:var(--lc-title-lh); transition: font-size 0.2s; }
+.list-card-desc { font-size:var(--lc-desc-fs); color:var(--muted); margin-top:3px; display:-webkit-box; -webkit-line-clamp:var(--lc-desc-clamp); -webkit-box-orient:vertical; overflow:hidden; transition: font-size 0.2s; }
+.mag-card-meta { font-size:var(--lc-meta-fs) !important; }
+.list-unread-bar { width:3px; background:var(--accent); align-self:stretch; border-radius:2px; flex-shrink:0; }
+
+/* Cluster */
+.cluster-mag-card { background:var(--cluster-bg); border:1px solid var(--cluster-border); border-radius:10px; overflow:hidden; }
+.cluster-hero { height:110px; position:relative; overflow:hidden; background:#2a1e05; }
+.cluster-hero img { width:100%; height:100%; object-fit:cover; opacity:0.55; }
+.cluster-hero-ph { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:28px; color:rgba(255,255,255,0.2); }
+.cluster-hero-overlay { position:absolute; inset:0; background:linear-gradient(to top,rgba(40,25,0,0.85) 0%,transparent 100%); display:flex; align-items:flex-end; padding:8px 12px; gap:5px; }
+.cluster-pill { font-size:9px; font-weight:700; text-transform:uppercase; background:var(--accent); color:#fff; padding:2px 7px; border-radius:8px; }
+.cluster-sources-badge { font-size:9px; color:rgba(255,255,255,0.65); }
+.cluster-mag-body { padding:11px 13px; }
+.cluster-mag-title { font-family:var(--serif); font-size:13px; font-weight:700; line-height:1.35; margin-bottom:5px; cursor:pointer; }
+.cluster-mag-desc { font-size:11px; color:var(--muted); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.cluster-expand-btn { display:flex; align-items:center; gap:3px; font-size:10px; color:#a07010; background:none; border:none; cursor:pointer; padding:5px 0 0; font-family:var(--sans); }
+.cluster-sub-list { display:none; margin-top:6px; border-top:1px solid var(--cluster-border); padding-top:6px; }
+.cluster-sub-list.open { display:block; }
+.cluster-sub-item { display:flex; gap:5px; padding:4px 0; border-bottom:1px solid rgba(232,212,138,0.2); font-size:11px; }
+.cluster-sub-item:last-child { border-bottom:none; }
+.cluster-sub-src { font-weight:700; color:#a07010; text-transform:uppercase; font-size:9px; min-width:56px; margin-top:1px; }
+
+/* API bar */
+#apikey-bar { background:#fffbe6; border-bottom:1px solid #e8d48a; padding:7px 18px; font-size:11px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#apikey-bar input { flex:1; max-width:280px; padding:4px 9px; border:1px solid #ccc; border-radius:5px; font-size:11px; font-family:var(--sans); }
+#apikey-bar button { padding:4px 10px; background:var(--accent); color:#fff; border:none; border-radius:5px; font-size:11px; cursor:pointer; font-family:var(--sans); }
+#apikey-bar.hidden { display:none; }
+
+/* Modals */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.48); z-index:100; align-items:center; justify-content:center; }
+.modal-overlay.open { display:flex; }
+.modal-box { background:var(--surface); border-radius:12px; padding:22px; width:440px; max-width:94vw; border:1px solid var(--border); }
+.modal-box h3 { font-family:var(--serif); font-size:17px; font-weight:700; margin-bottom:4px; }
+.modal-box p { font-size:12px; color:var(--muted); margin-bottom:12px; }
+.modal-box input, .modal-box select { width:100%; padding:8px 11px; border:1px solid var(--border); border-radius:7px; font-size:12px; font-family:var(--sans); background:var(--bg); color:var(--text); outline:none; margin-bottom:8px; }
+.modal-box input:focus, .modal-box select:focus { border-color:var(--accent); }
+.modal-btns { display:flex; gap:7px; justify-content:flex-end; margin-top:4px; }
+.modal-btns button { padding:6px 14px; border-radius:6px; font-size:12px; font-family:var(--sans); cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--text); }
+.modal-btns button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+.preset-feeds { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:12px; }
+.preset-chip { font-size:10px; padding:2px 8px; border-radius:10px; border:1px solid var(--border); background:var(--bg); cursor:pointer; color:var(--muted); }
+.preset-chip:hover { border-color:var(--accent); color:var(--accent); }
+
+/* Category modal */
+#cat-modal-feeds { max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:7px; margin-bottom:8px; }
+.cat-modal-feed-row { display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid var(--border); font-size:12px; cursor:pointer; }
+.cat-modal-feed-row:last-child { border-bottom:none; }
+.cat-modal-feed-row:hover { background:var(--bg); }
+.cat-modal-feed-row input[type=checkbox] { accent-color:var(--accent); }
+.ai-suggest-btn { display:flex; align-items:center; gap:5px; padding:6px 12px; background:var(--tag-bg); color:var(--accent); border:1px solid var(--accent); border-radius:6px; font-size:11px; cursor:pointer; font-family:var(--sans); font-weight:500; margin-bottom:10px; }
+.ai-suggest-btn:hover { background:var(--accent); color:#fff; }
+.cat-suggestion-list { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+.cat-suggestion { background:var(--bg); border:1px solid var(--border); border-radius:7px; padding:9px 11px; cursor:pointer; transition:border-color 0.15s; }
+.cat-suggestion:hover { border-color:var(--accent); }
+.cat-suggestion.selected { border-color:var(--accent); background:var(--tag-bg); }
+.cat-suggestion-name { font-size:12px; font-weight:600; color:var(--text); margin-bottom:3px; }
+.cat-suggestion-feeds { font-size:10px; color:var(--muted); }
+
+/* Detail */
+#detail { width:390px; border-left:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+#detail.hidden { display:none; }
+#detail-inner { overflow-y:auto; flex:1; }
+#detail-hero { height:190px; background:var(--bg); overflow:hidden; flex-shrink:0; }
+#detail-hero img { width:100%; height:100%; object-fit:cover; }
+#detail-content { padding:18px; }
+#detail-close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:11px; margin-bottom:12px; display:flex; align-items:center; gap:4px; font-family:var(--sans); }
+#detail-source { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--accent); }
+#detail-title { font-family:var(--serif); font-size:20px; font-weight:900; line-height:1.25; margin:7px 0 8px; }
+#detail-meta { font-size:11px; color:var(--muted); margin-bottom:12px; }
+#detail-desc { font-size:13px; line-height:1.75; font-family:var(--serif); }
+#detail-link { display:inline-flex; align-items:center; gap:4px; margin-top:16px; font-size:11px; color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:6px 12px; border-radius:6px; font-family:var(--sans); }
+
+/* Misc */
+.loading-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:56px 20px; color:var(--muted); gap:10px; }
+.loading-state i { font-size:34px; }
+.spinner { width:13px; height:13px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.status-bar { font-size:10px; color:var(--muted); padding:4px 16px; background:var(--bg); border-top:1px solid var(--border); flex-shrink:0; }
+
+/* Archive & search */
+@keyframes fadeOut { 0%{opacity:1;transform:scaleY(1);max-height:400px} 100%{opacity:0;transform:scaleY(0.95);max-height:0;margin:0;padding:0;border:none} }
+.fading-out { animation: fadeOut 0.5s ease forwards; overflow:hidden; pointer-events:none; }
+#search-bar { padding:8px 18px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#search-bar.hidden { display:none; }
+#search-input { flex:1; padding:6px 11px; border:1px solid var(--border); border-radius:20px; font-size:12px; font-family:var(--sans); background:var(--bg); color:var(--text); outline:none; }
+#search-input:focus { border-color:var(--accent); }
+#search-bar .search-meta { font-size:11px; color:var(--muted); white-space:nowrap; }
+#search-bar button { background:none; border:none; cursor:pointer; color:var(--muted); font-size:15px; padding:0 2px; }
+#search-bar button:hover { color:var(--accent); }
+.archive-badge { font-size:9px; background:#e8e4dc; color:var(--muted); padding:1px 5px; border-radius:6px; margin-left:4px; font-weight:600; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <div id="sidebar-logo">Lezer</div>
+    <button class="topbar-btn" onclick="openCatModal()" title="Categorieën beheren" style="padding:4px 7px;font-size:12px"><i class="ti ti-layout-sidebar"></i></button>
+    <button onclick="connectDrive()" title="Google Drive archief" style="background:none;border:none;cursor:pointer;padding:2px 4px" id="drive-btn"><i class="ti ti-brand-google-drive" style="font-size:16px;color:var(--muted)"></i></button>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Overzicht</div>
+    <div class="sidebar-item active" onclick="filterFeed('all')" id="nav-all"><i class="ti ti-layout-grid"></i> Alle artikelen <span class="count" id="count-all">0</span></div>
+    <div class="sidebar-item" onclick="filterFeed('clustered')" id="nav-clustered"><i class="ti ti-stack-2"></i> Gegroepeerd <span class="count" id="count-clusters">0</span></div>
+    <div class="sidebar-item" onclick="filterFeed('unread')" id="nav-unread"><i class="ti ti-circle-dot"></i> Ongelezen <span class="count" id="count-unread">0</span></div>
+    <div class="sidebar-item" onclick="filterFeed('archive')" id="nav-archive"><i class="ti ti-archive"></i> Archief <span class="count" id="count-archive">0</span></div>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">
+      Categorieën
+      <button onclick="openCatModal()" title="Categorie toevoegen"><i class="ti ti-plus"></i></button>
+    </div>
+    <div id="cat-list"></div>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">Alle bronnen</div>
+    <div id="source-list"></div>
+    <button class="add-feed-btn" onclick="openFeedModal()"><i class="ti ti-plus" style="font-size:11px"></i> Feed toevoegen</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="apikey-bar">
+    <i class="ti ti-key" style="font-size:13px;color:#a07010"></i>
+    <span style="color:#6b5a00">Anthropic API-sleutel:</span>
+    <input type="password" id="apikey-input" placeholder="sk-ant-..." />
+    <button onclick="saveApiKey()">Opslaan</button>
+    <span style="color:var(--muted);margin-left:2px">— <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--accent)">Aanmaken</a></span>
+  </div>
+  <div id="search-bar" class="hidden">
+    <i class="ti ti-search" style="font-size:14px;color:var(--muted)"></i>
+    <input id="search-input" type="search" placeholder="Zoek in artikelen en archief..." oninput="onSearchInput(this.value)" />
+    <span class="search-meta" id="search-meta"></span>
+    <button onclick="closeSearch()" title="Sluiten"><i class="ti ti-x"></i></button>
+  </div>
+  <div id="topbar">
+    <h2 id="topbar-title">Alle artikelen</h2>
+    <button class="topbar-btn" onclick="refreshFeeds()" id="refresh-btn"><i class="ti ti-refresh"></i> Vernieuwen</button>
+    <button class="topbar-btn active" onclick="toggleDedup()" id="dedup-btn"><i class="ti ti-wand"></i> AI dedup</button>
+    <button class="topbar-btn active" onclick="toggleView()" id="view-btn"><i class="ti ti-layout-grid"></i> Magazine</button>
+    <button class="topbar-btn" onclick="cycleDensity()" id="density-btn" title="Tekstgrootte lijst"></button>
+    <button class="topbar-btn active" onclick="toggleMarkOnScroll()" id="scroll-read-btn"><i class="ti ti-eye"></i> Scroll=gelezen</button>
+    <button class="topbar-btn" onclick="markAllRead()" title="Alles als gelezen markeren"><i class="ti ti-checks"></i> Alles gelezen</button>
+    <button class="topbar-btn" onclick="openSearch()" id="search-btn"><i class="ti ti-search"></i> Zoeken</button>
+  </div>
+  <div id="feed-list">
+    <div class="loading-state"><i class="ti ti-rss"></i><div>Voeg feeds toe om te beginnen</div></div>
+  </div>
+  <div class="status-bar" id="status-bar">Klaar</div>
+  <div class="status-bar" id="drive-status" style="cursor:pointer;border-top:none" onclick="connectDrive()">○ Drive niet verbonden — klik om te koppelen</div>
+</div>
+
+<div id="detail" class="hidden">
+  <div id="detail-inner">
+    <div id="detail-hero"></div>
+    <div id="detail-content">
+      <button id="detail-close" onclick="closeDetail()"><i class="ti ti-arrow-left"></i> Terug</button>
+      <div id="detail-source"></div>
+      <div id="detail-title"></div>
+      <div id="detail-meta"></div>
+      <div id="detail-desc"></div>
+      <a id="detail-link" href="#" target="_blank"><i class="ti ti-external-link"></i> Volledig artikel</a>
+    </div>
+  </div>
+</div>
+
+<!-- Feed modal -->
+<div class="modal-overlay" id="feed-modal" onclick="if(event.target===this)closeFeedModal()">
+  <div class="modal-box">
+    <h3>Feed toevoegen</h3>
+    <p>Kies een voorbeeld of plak een RSS/Atom-URL</p>
+    <div class="preset-feeds" id="preset-chips"></div>
+    <input id="feed-url-input" type="url" placeholder="https://voorbeeld.nl/rss" />
+    <input id="feed-name-input" type="text" placeholder="Naam (optioneel)" />
+    <select id="feed-cat-select"><option value="">— Geen categorie —</option></select>
+    <div class="modal-btns">
+      <button onclick="closeFeedModal()">Annuleren</button>
+      <button class="primary" onclick="addFeedFromInput()">Toevoegen</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category modal -->
+<div class="modal-overlay" id="cat-modal" onclick="if(event.target===this)closeCatModal()">
+  <div class="modal-box" style="width:480px">
+    <h3>Categorieën beheren</h3>
+    <p>Maak zelf een categorie, of laat AI er een voorstellen op basis van je feeds.</p>
+
+    <button class="ai-suggest-btn" onclick="aiSuggestCategories()" id="ai-suggest-btn">
+      <i class="ti ti-wand"></i> AI — stel categorieën voor
+    </button>
+
+    <div id="cat-suggestion-area" style="display:none">
+      <p style="font-size:11px;color:var(--muted);margin-bottom:6px">Klik op een voorstel om het over te nemen, of pas aan:</p>
+      <div class="cat-suggestion-list" id="cat-suggestions"></div>
+    </div>
+
+    <div style="display:flex;gap:7px;margin-bottom:8px">
+      <input id="new-cat-name" type="text" placeholder="Naam nieuwe categorie" style="flex:1;margin-bottom:0" />
+      <input id="new-cat-color" type="color" value="#c0392b" style="width:38px;padding:2px;margin-bottom:0;cursor:pointer" />
+      <button class="primary" style="padding:6px 12px;border-radius:6px;font-size:12px;font-family:var(--sans);cursor:pointer;border:none;background:var(--accent);color:#fff" onclick="addCategory()">Aanmaken</button>
+    </div>
+
+    <div id="cat-modal-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;margin-bottom:8px"></div>
+
+    <div class="modal-btns"><button onclick="closeCatModal()">Sluiten</button></div>
+  </div>
+</div>
+
+<script>
+const CORS_PROXIES = [
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+const PRESET_FEEDS = [
+  { name:'Nu.nl', url:'https://www.nu.nl/rss/algemeen' },
+  { name:'NRC', url:'https://www.nrc.nl/rss.php' },
+  { name:'De Volkskrant', url:'https://www.volkskrant.nl/rss.xml' },
+  { name:'Tweakers', url:'https://feeds.feedburner.com/tweakers/mixed' },
+  { name:'BBC World', url:'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  { name:'Reuters', url:'https://feeds.reuters.com/reuters/topNews' },
+  { name:'Hacker News', url:'https://news.ycombinator.com/rss' },
+  { name:'The Verge', url:'https://www.theverge.com/rss/index.xml' },
+];
+const PLACEHOLDER_COLORS = ['#c0392b','#2980b9','#27ae60','#8e44ad','#d35400','#16a085','#2c3e50','#c0832b'];
+const PLACEHOLDER_ICONS  = ['ti-news','ti-world','ti-device-tv','ti-rocket','ti-leaf','ti-bolt','ti-star','ti-flame'];
+
+let archive    = JSON.parse(localStorage.getItem('rss_archive')    || '[]'); // {id,feedName,feedColor,feedIcon,title,desc,link,image,pubDate,archivedAt}
+let driveFileId    = localStorage.getItem('rss_drive_file_id')    || null;
+let driveToken     = null;   // OAuth access token (in-memory only)
+let driveSyncTimer = null;
+let driveSyncBusy  = false;
+// ↓ Paste your Google OAuth Client ID here after setup
+const GOOGLE_CLIENT_ID = localStorage.getItem('rss_google_client_id') || '';
+let feeds      = JSON.parse(localStorage.getItem('rss_feeds')      || '[]');
+let categories = JSON.parse(localStorage.getItem('rss_categories') || '[]');
+let articles   = [];
+let clusters   = [];
+let readArticles = new Set(JSON.parse(localStorage.getItem('rss_read') || '[]'));
+let currentFilter = 'all';
+let dedupEnabled  = true;
+let viewMode = localStorage.getItem('rss_view') || 'magazine';
+let markOnScroll = localStorage.getItem('rss_mark_on_scroll') !== 'false';
+let listDensity  = localStorage.getItem('rss_list_density') || 'compact'; // compact | comfortable | spacious
+let apiKey   = localStorage.getItem('anthropic_api_key') || '';
+let dragFeedId = null;
+let scrollObserver = null;
+const scrollTimers = {};
+
+function saveAll() {
+  localStorage.setItem('rss_feeds',      JSON.stringify(feeds));
+  localStorage.setItem('rss_categories', JSON.stringify(categories));
+  localStorage.setItem('rss_read',       JSON.stringify([...readArticles]));
+  localStorage.setItem('rss_archive',    JSON.stringify(archive.slice(0, 1500)));
+}
+
+function archiveArticle(id) {
+  const a = articles.find(x => x.id === id);
+  if (!a || archive.find(x => x.id === id)) return;
+  archive.unshift({ id:a.id, feedName:a.feedName, feedColor:a.feedColor, feedIcon:a.feedIcon, title:a.title, desc:a.desc, link:a.link, image:a.image, pubDate:a.pubDate, archivedAt:new Date().toISOString() });
+  if (archive.length > 1500) archive.pop();
+  saveAll();
+  updateCounts();
+  scheduleDriveSync();
+}
+
+function fadeAndArchive(id) {
+  const el = document.querySelector('[data-id="' + id + '"]');
+  if (el) {
+    el.classList.add('fading-out');
+    setTimeout(() => { el.remove(); archiveArticle(id); }, 500);
+  } else {
+    archiveArticle(id);
+  }
+}
+
+if (apiKey) document.getElementById('apikey-bar').classList.add('hidden');
+function saveApiKey() {
+  apiKey = document.getElementById('apikey-input').value.trim();
+  if (apiKey) { localStorage.setItem('anthropic_api_key', apiKey); document.getElementById('apikey-bar').classList.add('hidden'); setStatus('API-sleutel opgeslagen.'); }
+}
+
+/* ── View toggle ── */
+applyView();
+applyDensity();
+function applyDensity() {
+  const feedList = document.getElementById('feed-list');
+  feedList.classList.remove('density-comfortable','density-spacious');
+  if (listDensity === 'comfortable') feedList.classList.add('density-comfortable');
+  if (listDensity === 'spacious')    feedList.classList.add('density-spacious');
+  const labels = { compact:'Compact', comfortable:'Normaal', spacious:'Ruim' };
+  const icons  = { compact:'ti-list-details', comfortable:'ti-list', spacious:'ti-layout-list' };
+  const btn = document.getElementById('density-btn');
+  if (btn) btn.innerHTML = `<i class="ti ${icons[listDensity]}"></i> ${labels[listDensity]}`;
+}
+function cycleDensity() {
+  const order = ['compact','comfortable','spacious'];
+  listDensity = order[(order.indexOf(listDensity) + 1) % order.length];
+  localStorage.setItem('rss_list_density', listDensity);
+  applyDensity();
+}
+function applyView() {
+  const btn = document.getElementById('view-btn');
+  btn.innerHTML = viewMode === 'magazine' ? '<i class="ti ti-layout-grid"></i> Magazine' : '<i class="ti ti-list"></i> Lijst';
+  btn.classList.toggle('active', viewMode === 'magazine');
+}
+function toggleView() { viewMode = viewMode === 'magazine' ? 'list' : 'magazine'; localStorage.setItem('rss_view', viewMode); applyView(); renderFeed(); }
+
+/* ── Feed modal ── */
+function openFeedModal() {
+  document.getElementById('feed-modal').classList.add('open');
+  document.getElementById('preset-chips').innerHTML = PRESET_FEEDS.map(f =>
+    `<span class="preset-chip" onclick="document.getElementById('feed-url-input').value='${f.url}';document.getElementById('feed-name-input').value='${f.name}'">${f.name}</span>`
+  ).join('');
+  const sel = document.getElementById('feed-cat-select');
+  sel.innerHTML = '<option value="">— Geen categorie —</option>' + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+function closeFeedModal() { document.getElementById('feed-modal').classList.remove('open'); }
+
+function addFeedFromInput() {
+  const url  = document.getElementById('feed-url-input').value.trim();
+  const name = document.getElementById('feed-name-input').value.trim();
+  const catId = document.getElementById('feed-cat-select').value;
+  if (!url) return;
+  if (feeds.find(f => f.url === url)) { alert('Feed bestaat al'); return; }
+  try { new URL(url); } catch(e) { alert('Geen geldige URL'); return; }
+  const ci = feeds.length % PLACEHOLDER_COLORS.length;
+  const feed = { url, name: name || new URL(url).hostname, id: Date.now(), color: PLACEHOLDER_COLORS[ci], icon: PLACEHOLDER_ICONS[ci], catId: catId || null };
+  feeds.push(feed);
+  if (catId) { const cat = categories.find(c => c.id == catId); if (cat && !cat.feedIds.includes(feed.id)) cat.feedIds.push(feed.id); }
+  saveAll();
+  closeFeedModal();
+  document.getElementById('feed-url-input').value = '';
+  document.getElementById('feed-name-input').value = '';
+  renderSidebar();
+  refreshFeeds();
+}
+
+/* ── Category modal ── */
+function openCatModal() {
+  document.getElementById('cat-modal').classList.add('open');
+  document.getElementById('cat-suggestion-area').style.display = 'none';
+  renderCatModalList();
+}
+function closeCatModal() { document.getElementById('cat-modal').classList.remove('open'); renderSidebar(); }
+
+function addCategory(name, color, feedIds) {
+  name  = name  || document.getElementById('new-cat-name').value.trim();
+  color = color || document.getElementById('new-cat-color').value;
+  feedIds = feedIds || [];
+  if (!name) return;
+  const cat = { id: Date.now(), name, color, feedIds };
+  categories.push(cat);
+  saveAll();
+  document.getElementById('new-cat-name').value = '';
+  renderCatModalList();
+  renderSidebar();
+}
+
+function deleteCategory(id) {
+  categories = categories.filter(c => c.id !== id);
+  feeds.forEach(f => { if (f.catId == id) f.catId = null; });
+  saveAll();
+  renderCatModalList();
+  renderSidebar();
+}
+
+function renderCatModalList() {
+  const el = document.getElementById('cat-modal-list');
+  if (!categories.length) { el.innerHTML = '<div style="padding:14px;font-size:12px;color:var(--muted);text-align:center">Nog geen categorieën</div>'; return; }
+  el.innerHTML = categories.map(c => {
+    const catFeeds = feeds.filter(f => c.feedIds.includes(f.id));
+    return `<div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+      <span style="width:10px;height:10px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${c.name}</div>
+        <div style="font-size:10px;color:var(--muted)">${catFeeds.length ? catFeeds.map(f=>f.name).join(', ') : 'Geen feeds'}</div>
+      </div>
+      <button onclick="openAssignModal(${c.id})" style="background:none;border:1px solid var(--border);border-radius:5px;font-size:10px;padding:3px 7px;cursor:pointer;color:var(--muted);font-family:var(--sans)"><i class="ti ti-pencil"></i> Feeds</button>
+      <button onclick="deleteCategory(${c.id})" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:0 2px"><i class="ti ti-trash"></i></button>
+    </div>`;
+  }).join('');
+}
+
+/* Assign feeds to category */
+function openAssignModal(catId) {
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.style.zIndex = '200';
+  overlay.innerHTML = `<div class="modal-box">
+    <h3>Feeds in "${cat.name}"</h3>
+    <p>Selecteer welke feeds bij deze categorie horen.</p>
+    <div id="assign-feed-list" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;margin-bottom:10px">
+      ${feeds.map(f => `<div class="cat-modal-feed-row">
+        <input type="checkbox" id="af-${f.id}" ${cat.feedIds.includes(f.id) ? 'checked' : ''} onchange="toggleFeedInCat(${catId},${f.id},this.checked)">
+        <img src="https://www.google.com/s2/favicons?domain=${new URL(f.url).hostname}&sz=16" style="width:13px;height:13px;border-radius:2px" onerror="this.style.display='none'" alt="">
+        <label for="af-${f.id}" style="cursor:pointer;flex:1">${f.name}</label>
+      </div>`).join('')}
+    </div>
+    <div class="modal-btns"><button class="primary" onclick="this.closest('.modal-overlay').remove();renderCatModalList();renderSidebar()">Klaar</button></div>
+  </div>`;
+  overlay.onclick = e => { if (e.target === overlay) { overlay.remove(); renderCatModalList(); renderSidebar(); } };
+  document.body.appendChild(overlay);
+}
+function toggleFeedInCat(catId, feedId, checked) {
+  const cat = categories.find(c => c.id === catId);
+  if (!cat) return;
+  if (checked) { if (!cat.feedIds.includes(feedId)) cat.feedIds.push(feedId); const f = feeds.find(f=>f.id===feedId); if(f) f.catId = catId; }
+  else { cat.feedIds = cat.feedIds.filter(id => id !== feedId); const f = feeds.find(f=>f.id===feedId); if(f && f.catId===catId) f.catId = null; }
+  saveAll();
+}
+
+/* ── AI Category suggestions ── */
+async function aiSuggestCategories() {
+  if (!apiKey) { alert('Voeg eerst een Anthropic API-sleutel in.'); return; }
+  if (!feeds.length) { alert('Voeg eerst feeds toe.'); return; }
+  const btn = document.getElementById('ai-suggest-btn');
+  btn.innerHTML = '<span class="spinner"></span> AI denkt na...';
+  btn.disabled = true;
+  const feedList = feeds.map(f => f.name).join(', ');
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 800,
+        system: 'Je bent een RSS-reader assistent. Gegeven een lijst van nieuwsbronnen, stel logische categorieën voor om ze te groeperen. Reageer ALLEEN in JSON: {"categories":[{"name":"Categorie","color":"#hexkleur","feeds":["naam1","naam2"]}]}. Gebruik maximaal 5 categorieën. Kies passende kleuren per categorie (nieuws=blauw, tech=paars, sport=groen, etc).',
+        messages: [{ role:'user', content:`Groepeer deze feeds in categorieën: ${feedList}` }]
+      })
+    });
+    const data = await resp.json();
+    const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+    const suggestions = parsed.categories || [];
+    const area = document.getElementById('cat-suggestion-area');
+    const list = document.getElementById('cat-suggestions');
+    area.style.display = 'block';
+    list.innerHTML = suggestions.map((s, i) => {
+      const matchedFeeds = feeds.filter(f => s.feeds.some(sf => f.name.toLowerCase().includes(sf.toLowerCase()) || sf.toLowerCase().includes(f.name.toLowerCase())));
+      return `<div class="cat-suggestion" id="sug-${i}" onclick="applySuggestion(${i}, ${JSON.stringify(s).replace(/"/g,'&quot;')})">
+        <div class="cat-suggestion-name" style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:50%;background:${s.color||'#888'};flex-shrink:0"></span>${s.name}</div>
+        <div class="cat-suggestion-feeds">${matchedFeeds.map(f=>f.name).join(', ') || s.feeds.join(', ')}</div>
+      </div>`;
+    }).join('');
+  } catch(e) { alert('Kon geen suggesties ophalen. Controleer de API-sleutel.'); }
+  btn.innerHTML = '<i class="ti ti-wand"></i> AI — stel categorieën voor';
+  btn.disabled = false;
+}
+
+function applySuggestion(i, s) {
+  document.querySelectorAll('.cat-suggestion').forEach(el => el.classList.remove('selected'));
+  document.getElementById(`sug-${i}`)?.classList.add('selected');
+  const matchedFeeds = feeds.filter(f => s.feeds.some(sf => f.name.toLowerCase().includes(sf.toLowerCase()) || sf.toLowerCase().includes(f.name.toLowerCase())));
+  const feedIds = matchedFeeds.map(f => f.id);
+  if (!categories.find(c => c.name === s.name)) {
+    addCategory(s.name, s.color || '#888', feedIds);
+    matchedFeeds.forEach(f => { f.catId = categories.find(c=>c.name===s.name)?.id || null; });
+    saveAll();
+  }
+}
+
+/* ── Drag & drop feeds to categories ── */
+function initDragDrop() {
+  document.querySelectorAll('.cat-feed-draggable').forEach(el => {
+    el.setAttribute('draggable','true');
+    el.addEventListener('dragstart', e => { dragFeedId = parseInt(el.dataset.feedId); el.classList.add('dragging'); });
+    el.addEventListener('dragend', e => { el.classList.remove('dragging'); dragFeedId = null; });
+  });
+  document.querySelectorAll('.cat-drop-zone').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('drag-over');
+      if (dragFeedId === null) return;
+      const toCatId = parseInt(zone.dataset.catId);
+      const feed = feeds.find(f => f.id === dragFeedId);
+      if (!feed) return;
+      // Remove from old cat
+      categories.forEach(c => { c.feedIds = c.feedIds.filter(id => id !== dragFeedId); });
+      // Add to new cat
+      const toCat = categories.find(c => c.id === toCatId);
+      if (toCat && !toCat.feedIds.includes(dragFeedId)) { toCat.feedIds.push(dragFeedId); feed.catId = toCatId; }
+      saveAll(); renderSidebar();
+    });
+  });
+}
+
+/* ── Sidebar ── */
+function renderSidebar() {
+  // Categories
+  const catEl = document.getElementById('cat-list');
+  catEl.innerHTML = categories.map(cat => {
+    const catFeeds = feeds.filter(f => cat.feedIds.includes(f.id));
+    const catArticleCount = articles.filter(a => catFeeds.some(f => f.id === a.feedId)).length;
+    const feedItems = catFeeds.map(f => {
+      const cnt = articles.filter(a => a.feedId === f.id).length;
+      const fav = `https://www.google.com/s2/favicons?domain=${new URL(f.url).hostname}&sz=16`;
+      return `<div class="cat-feed-item cat-feed-draggable" data-feed-id="${f.id}" onclick="filterFeed('feed:${f.id}')" id="nav-feed-${f.id}">
+        <img class="feed-favicon" src="${fav}" onerror="this.style.display='none'" alt="">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+        <span class="count">${cnt}</span>
+      </div>`;
+    }).join('');
+    return `<div class="cat-group">
+      <div class="cat-header cat-drop-zone" data-cat-id="${cat.id}" onclick="filterFeed('cat:${cat.id}')" id="nav-cat-${cat.id}">
+        <span class="cat-dot" style="background:${cat.color}"></span>
+        <span class="cat-name">${cat.name}</span>
+        <span class="cat-count">${catArticleCount}</span>
+        <i class="ti ti-chevron-down cat-chevron" id="chevron-${cat.id}"></i>
+      </div>
+      <div class="cat-feeds" id="catfeeds-${cat.id}">${feedItems}</div>
+    </div>`;
+  }).join('');
+
+  // Toggle cat open/close
+  categories.forEach(cat => {
+    const hdr = document.getElementById(`nav-cat-${cat.id}`);
+    const chevron = document.getElementById(`chevron-${cat.id}`);
+    const feedsEl = document.getElementById(`catfeeds-${cat.id}`);
+    if (hdr && feedsEl) {
+      hdr.addEventListener('click', function(e) {
+        if (e.target.classList.contains('cat-drop-zone') || e.target === hdr) {
+          const isOpen = feedsEl.classList.toggle('open');
+          chevron?.classList.toggle('open', isOpen);
+        }
+      });
+    }
+  });
+
+  // Uncategorised feeds
+  const uncatFeeds = feeds.filter(f => !categories.some(c => c.feedIds.includes(f.id)));
+  const srcEl = document.getElementById('source-list');
+  srcEl.innerHTML = uncatFeeds.map(f => {
+    const cnt = articles.filter(a => a.feedId === f.id).length;
+    const fav = `https://www.google.com/s2/favicons?domain=${new URL(f.url).hostname}&sz=16`;
+    return `<div class="cat-feed-item cat-feed-draggable" data-feed-id="${f.id}" onclick="filterFeed('feed:${f.id}')" id="nav-feed-${f.id}">
+      <img class="feed-favicon" src="${fav}" onerror="this.style.display='none'" alt="">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+      <span class="count">${cnt}</span>
+    </div>`;
+  }).join('');
+
+  initDragDrop();
+}
+
+/* ── Fetch ── */
+function extractImage(item) {
+  const enc = item.querySelector('enclosure[type^="image"]');
+  if (enc) return enc.getAttribute('url');
+  const media = item.querySelector('content[url], thumbnail[url]');
+  if (media) return media.getAttribute('url');
+  const descRaw = item.querySelector('description, content, summary')?.innerHTML || '';
+  const m = descRaw.match(/src=["']([^"']+\.(jpg|jpeg|png|webp)[^"']*)/i);
+  if (m) return m[1];
+  return null;
+}
+
+async function fetchFeed(feed) {
+  for (const makeProxy of CORS_PROXIES) {
+    try {
+      const resp = await fetch(makeProxy(feed.url), { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      let xmlText = text;
+      try { xmlText = JSON.parse(text).contents || text; } catch(e) {}
+      const xml = new DOMParser().parseFromString(xmlText, 'text/xml');
+      if (xml.querySelector('parsererror')) continue;
+      const items = [...xml.querySelectorAll('item, entry')];
+      if (!items.length) continue;
+      return items.slice(0, 20).map(item => {
+        const title = item.querySelector('title')?.textContent?.trim() || '(geen titel)';
+        const link  = item.querySelector('link')?.textContent?.trim() || item.querySelector('link')?.getAttribute('href') || '#';
+        const desc  = (item.querySelector('description, summary, content')?.textContent || '').replace(/<[^>]+>/g,'').trim().slice(0,400);
+        const pub   = item.querySelector('pubDate, published, updated')?.textContent || '';
+        const img   = extractImage(item);
+        const id    = feed.id + '_' + btoa(unescape(encodeURIComponent(title))).slice(0,12);
+        return { id, feedId:feed.id, feedName:feed.name, feedColor:feed.color||'#c0392b', feedIcon:feed.icon||'ti-rss', title, link, desc, image:img, pubDate: pub ? new Date(pub) : new Date(), read: readArticles.has(id) };
+      });
+    } catch(e) { continue; }
+  }
+  return [];
+}
+
+async function refreshFeeds() {
+  if (!feeds.length) { renderFeed(); return; }
+  setStatus('Feeds ophalen...');
+  document.getElementById('refresh-btn').innerHTML = '<span class="spinner"></span> Laden...';
+  const results = await Promise.all(feeds.map(async f => ({ feed:f, items: await fetchFeed(f) })));
+  const failed  = results.filter(r => !r.items.length).map(r => r.feed.name);
+  articles = results.flatMap(r => r.items);
+  articles.sort((a,b) => b.pubDate - a.pubDate);
+  if (dedupEnabled && apiKey && articles.length > 3) { setStatus('AI clustert...'); await clusterArticles(); }
+  else clusters = [];
+  updateCounts(); renderSidebar(); renderFeed();
+  document.getElementById('refresh-btn').innerHTML = '<i class="ti ti-refresh"></i> Vernieuwen';
+  const failMsg = failed.length ? ` · Mislukt: ${failed.join(', ')}` : '';
+  setStatus(`${articles.length} artikelen van ${feeds.length - failed.length}/${feeds.length} feeds${clusters.length ? ` · ${clusters.length} clusters` : ''}${failMsg}`);
+}
+
+async function clusterArticles() {
+  const titles = articles.map((a,i) => `${i}: ${a.title}`).join('\n');
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000,
+        system:'Je bent een nieuwsclusteringsassistent. Identificeer groepen van 2+ artikelen over hetzelfde onderwerp. Reageer ALLEEN in JSON: {"clusters":[{"indices":[0,1],"topic":"omschrijving"}]}.',
+        messages:[{ role:'user', content:`Cluster:\n${titles}` }] })
+    });
+    const data = await resp.json();
+    if (data.error) { clusters=[]; return; }
+    const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
+    clusters = (parsed.clusters||[]).map(c => ({ topic:c.topic, articles: c.indices.map(i=>articles[i]).filter(Boolean) })).filter(c=>c.articles.length>=2);
+  } catch(e) { clusters=[]; }
+}
+
+function getClusteredIds() { const s=new Set(); clusters.forEach(c=>c.articles.forEach(a=>s.add(a.id))); return s; }
+
+function updateCounts() {
+  document.getElementById('count-all').textContent      = articles.filter(a=>!a.read).length;
+  document.getElementById('count-clusters').textContent = clusters.length;
+  document.getElementById('count-unread').textContent   = articles.filter(a=>!a.read).length;
+  document.getElementById('count-archive').textContent  = archive.length;
+}
+
+/* ── Filter ── */
+function filterFeed(type) {
+  currentFilter = type;
+  document.querySelectorAll('.sidebar-item,.cat-header,.cat-feed-item').forEach(el=>el.classList.remove('active'));
+  const map = { all:'nav-all', clustered:'nav-clustered', unread:'nav-unread', archive:'nav-archive' };
+  if (map[type]) document.getElementById(map[type])?.classList.add('active');
+  else if (type.startsWith('cat:')) document.getElementById(`nav-cat-${type.split(':')[1]}`)?.classList.add('active');
+  else if (type.startsWith('feed:')) document.getElementById(`nav-feed-${type.split(':')[1]}`)?.classList.add('active');
+  const titles = { all:'Alle artikelen', clustered:'Gegroepeerde onderwerpen', unread:'Ongelezen artikelen', archive:'Archief' };
+  let title = titles[type];
+  if (!title && type.startsWith('cat:')) title = categories.find(c=>c.id==type.split(':')[1])?.name || type;
+  if (!title && type.startsWith('feed:')) title = feeds.find(f=>f.id==type.split(':')[1])?.name || type;
+  document.getElementById('topbar-title').textContent = title || type;
+  renderFeed();
+}
+
+/* ── Render ── */
+function renderFeed() {
+  const list = document.getElementById('feed-list');
+  if (!articles.length && !feeds.length) { list.innerHTML=`<div class="loading-state"><i class="ti ti-rss"></i><div>Voeg feeds toe en klik Vernieuwen</div></div>`; return; }
+  if (!articles.length) { list.innerHTML=`<div class="loading-state"><i class="ti ti-refresh"></i><div>Klik op Vernieuwen</div></div>`; return; }
+
+  let pool = [];
+  if (currentFilter === 'all') {
+    pool = articles.map(a=>({type:'article',date:a.pubDate,obj:a}));
+    if (dedupEnabled && clusters.length) {
+      const cids = getClusteredIds();
+      const stand = articles.filter(a=>!cids.has(a.id)).map(a=>({type:'article',date:a.pubDate,obj:a}));
+      const clus  = clusters.map(c=>({type:'cluster',date:c.articles[0].pubDate,obj:c}));
+      pool = [...stand,...clus].sort((a,b)=>b.date-a.date);
+    }
+  } else if (currentFilter==='clustered') {
+    pool = clusters.map(c=>({type:'cluster',date:c.articles[0].pubDate,obj:c}));
+  } else if (currentFilter==='unread') {
+    pool = articles.filter(a=>!a.read).map(a=>({type:'article',date:a.pubDate,obj:a}));
+  } else if (currentFilter.startsWith('cat:')) {
+    const catId = parseInt(currentFilter.split(':')[1]);
+    const cat = categories.find(c=>c.id===catId);
+    const catFeedIds = new Set(cat?.feedIds||[]);
+    pool = articles.filter(a=>catFeedIds.has(a.feedId)).map(a=>({type:'article',date:a.pubDate,obj:a}));
+  } else if (currentFilter.startsWith('feed:')) {
+    const fid = parseInt(currentFilter.split(':')[1]);
+    pool = articles.filter(a=>a.feedId===fid).map(a=>({type:'article',date:a.pubDate,obj:a}));
+  } else if (currentFilter === 'archive') {
+    pool = archive.map(a=>({type:'article',date:new Date(a.pubDate),obj:{...a,read:true}}));
+  }
+
+  if (!pool.length) { list.innerHTML=`<div class="loading-state"><i class="ti ti-check"></i><div>Niets te tonen</div></div>`; return; }
+
+  if (viewMode==='list') {
+    list.innerHTML = `<div class="magazine-grid view-list">${pool.map(item=>item.type==='cluster'?renderClusterList(item.obj):renderListCard(item.obj)).join('')}</div>`;
+  } else {
+    const firstArt = pool.find(d=>d.type==='article');
+    const hero = firstArt ? renderHeroCard(firstArt.obj) : '';
+    const rest  = pool.filter(d=>d!==firstArt).map(item=>item.type==='cluster'?renderClusterMag(item.obj):renderMagCard(item.obj)).join('');
+    list.innerHTML = `<div class="magazine-grid view-magazine">${hero}${rest}</div>`;
+  }
+
+  list.querySelectorAll('[data-id]').forEach(el=>el.addEventListener('click',function(e){ if(!e.target.closest('.cluster-expand-btn')&&!e.target.closest('.cluster-sub-list')) openDetail(this.dataset.id); }));
+  list.querySelectorAll('.cluster-expand-btn').forEach(btn=>btn.addEventListener('click',function(e){ e.stopPropagation(); const sub=this.parentElement.querySelector('.cluster-sub-list'); if(sub){ sub.classList.toggle('open'); this.innerHTML=sub.classList.contains('open')?'<i class="ti ti-chevron-up" style="font-size:11px"></i> Minder':'<i class="ti ti-chevron-down" style="font-size:11px"></i> Alle bronnen'; } }));
+  initScrollObserver();
+}
+
+function renderHeroCard(a) {
+  const dot = !a.read ? '<span class="hero-unread-dot"></span>' : '';
+  const img = a.image ? `<img class="hero-img" src="${a.image}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="hero-placeholder" style="display:none;background:${a.feedColor}"><i class="ti ${a.feedIcon}" style="font-size:60px;color:rgba(255,255,255,0.18)"></i></div>` : `<div class="hero-placeholder" style="background:${a.feedColor}"><i class="ti ${a.feedIcon}" style="font-size:60px;color:rgba(255,255,255,0.18)"></i></div>`;
+  return `<div class="hero-card" data-id="${a.id}">${img}<div class="hero-overlay"><div class="hero-source">${dot}${a.feedName}</div><div class="hero-title">${a.title}</div>${a.desc?`<div class="hero-desc">${a.desc}</div>`:''}<div class="hero-meta">${formatTime(a.pubDate)}</div></div></div>`;
+}
+function renderMagCard(a) {
+  const unread = !a.read?' unread':'';
+  const img = a.image ? `<div class="mag-card-img-wrap"><img class="mag-card-img" src="${a.image}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="mag-card-placeholder" style="display:none;background:${a.feedColor}18"><i class="ti ${a.feedIcon}" style="color:${a.feedColor}"></i></div></div>` : `<div class="mag-card-img-wrap"><div class="mag-card-placeholder" style="background:${a.feedColor}18"><i class="ti ${a.feedIcon}" style="color:${a.feedColor}"></i></div></div>`;
+  return `<div class="mag-card${unread}" data-id="${a.id}">${img}<div class="mag-card-body"><div class="mag-card-meta"><span class="mag-source" style="color:${a.feedColor}">${a.feedName}</span><span class="mag-dot"></span><span class="mag-time">${formatTime(a.pubDate)}</span></div><div class="mag-title">${a.title}</div>${a.desc?`<div class="mag-desc">${a.desc}</div>`:''}</div></div>`;
+}
+function renderListCard(a) {
+  const unread = !a.read?' unread':'';
+  const thumb = a.image ? `<img class="list-card-thumb" src="${a.image}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="list-card-thumb-ph" style="display:none"><i class="ti ${a.feedIcon}" style="color:${a.feedColor}"></i></div>` : `<div class="list-card-thumb-ph"><i class="ti ${a.feedIcon}" style="color:${a.feedColor}"></i></div>`;
+  return `<div class="list-card${unread}" data-id="${a.id}">${!a.read?'<div class="list-unread-bar"></div>':''}${thumb}<div class="list-card-body"><div class="mag-card-meta"><span class="mag-source" style="color:${a.feedColor}">${a.feedName}</span><span class="mag-dot"></span><span class="mag-time">${formatTime(a.pubDate)}</span></div><div class="list-card-title">${a.title}</div>${a.desc?`<div class="list-card-desc">${a.desc}</div>`:''}</div></div>`;
+}
+function renderClusterMag(c) {
+  const best = c.articles.reduce((a,b)=>b.desc.length>a.desc.length?b:a,c.articles[0]);
+  const srcs = [...new Set(c.articles.map(a=>a.feedName))].join(' · ');
+  const img = best.image ? `<img src="${best.image}" style="width:100%;height:100%;object-fit:cover;opacity:0.55" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="cluster-hero-ph" style="display:none"><i class="ti ti-stack-2"></i></div>` : `<div class="cluster-hero-ph"><i class="ti ti-stack-2"></i></div>`;
+  const subs = c.articles.map(a=>`<div class="cluster-sub-item"><div class="cluster-sub-src">${a.feedName}</div><div>${a.title}</div></div>`).join('');
+  return `<div class="cluster-mag-card"><div class="cluster-hero">${img}<div class="cluster-hero-overlay"><span class="cluster-pill">${c.articles.length} bronnen</span><span class="cluster-sources-badge">${srcs}</span></div></div><div class="cluster-mag-body"><div class="cluster-mag-title" data-id="${best.id}">${best.title}</div>${best.desc?`<div class="cluster-mag-desc">${best.desc}</div>`:''}<button class="cluster-expand-btn"><i class="ti ti-chevron-down" style="font-size:11px"></i> Alle bronnen</button><div class="cluster-sub-list">${subs}</div></div></div>`;
+}
+function renderClusterList(c) {
+  const best = c.articles.reduce((a,b)=>b.desc.length>a.desc.length?b:a,c.articles[0]);
+  const srcs = [...new Set(c.articles.map(a=>a.feedName))].join(' · ');
+  const subs = c.articles.map(a=>`<div class="cluster-sub-item"><div class="cluster-sub-src">${a.feedName}</div><div>${a.title}</div></div>`).join('');
+  const thumb = best.image ? `<img class="list-card-thumb" src="${best.image}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><div class="list-card-thumb-ph" style="display:none;background:var(--cluster-bg)"><i class="ti ti-stack-2" style="color:#a07010"></i></div>` : `<div class="list-card-thumb-ph" style="background:var(--cluster-bg)"><i class="ti ti-stack-2" style="color:#a07010"></i></div>`;
+  return `<div class="list-card" style="background:var(--cluster-bg);border-bottom-color:var(--cluster-border)">${thumb}<div class="list-card-body"><div class="mag-card-meta"><span class="mag-source" style="color:#a07010">● ${c.articles.length} bronnen</span><span class="mag-dot"></span><span class="mag-time">${srcs}</span></div><div class="list-card-title" data-id="${best.id}" style="cursor:pointer">${best.title}</div>${best.desc?`<div class="list-card-desc">${best.desc}</div>`:''}<button class="cluster-expand-btn" style="padding:4px 0 0"><i class="ti ti-chevron-down" style="font-size:11px"></i> Alle bronnen</button><div class="cluster-sub-list">${subs}</div></div></div>`;
+}
+
+function openDetail(id) {
+  // check archive first
+  const archived = archive.find(x => x.id === id);
+  if (archived) { openDetailObj(archived); return; }
+  const a = articles.find(x=>x.id===id); if(!a) return;
+  const wasRead = a.read;
+  a.read=true; readArticles.add(id); saveAll();
+  if (!wasRead) setTimeout(() => fadeAndArchive(id), 2000);
+  openDetailObj(a);
+  document.querySelector(`[data-id="${id}"]`)?.classList.remove('unread');
+  updateCounts();
+}
+function openDetailObj(a) {
+  const pubDate = a.pubDate instanceof Date ? a.pubDate : new Date(a.pubDate);
+  document.getElementById('detail-hero').innerHTML = a.image
+    ? `<img src="${a.image}" style="width:100%;height:100%;object-fit:cover" alt="">`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${a.feedColor}18"><i class="ti ${a.feedIcon}" style="font-size:52px;color:${a.feedColor};opacity:0.4"></i></div>`;
+  document.getElementById('detail-source').textContent = a.feedName + (a.archivedAt ? '  ·  Archief' : '');
+  document.getElementById('detail-title').textContent  = a.title;
+  document.getElementById('detail-meta').textContent   = !isNaN(pubDate) ? pubDate.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '';
+  document.getElementById('detail-desc').textContent   = a.desc || 'Geen beschrijving beschikbaar.';
+  document.getElementById('detail-link').href = a.link;
+  document.getElementById('detail').classList.remove('hidden');
+}
+function closeDetail() { document.getElementById('detail').classList.add('hidden'); }
+
+function toggleDedup() {
+  dedupEnabled = !dedupEnabled;
+  const btn = document.getElementById('dedup-btn');
+  btn.classList.toggle('active', dedupEnabled);
+  btn.innerHTML = `<i class="ti ti-wand"></i> AI dedup${dedupEnabled?'':' (uit)'}`;
+  if (dedupEnabled && apiKey && articles.length) clusterArticles().then(()=>{ updateCounts(); renderFeed(); });
+  else { clusters=[]; renderFeed(); }
+}
+
+function formatTime(d) {
+  if(!d||isNaN(d)) return '';
+  const diff = (new Date()-d)/1000;
+  if(diff<60) return 'zojuist';
+  if(diff<3600) return `${Math.floor(diff/60)}m geleden`;
+  if(diff<86400) return `${Math.floor(diff/3600)}u geleden`;
+  return d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+}
+function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+
+function initScrollObserver() {
+  if (scrollObserver) scrollObserver.disconnect();
+  Object.keys(scrollTimers).forEach(k => clearTimeout(scrollTimers[k]));
+  if (!markOnScroll) return;
+
+  const feedList = document.getElementById('feed-list');
+
+  // Collect which elements are already visible at the moment of initialisation.
+  // These are NOT marked as read — the user hasn't scrolled to them yet.
+  const initiallyVisible = new Set();
+  document.querySelectorAll('[data-id]').forEach(el => {
+    const rect = el.getBoundingClientRect();
+    const listRect = feedList.getBoundingClientRect();
+    // Consider an element "initially visible" if it overlaps the viewport
+    if (rect.top < listRect.bottom && rect.bottom > listRect.top) {
+      initiallyVisible.add(el.dataset.id);
+    }
+  });
+
+  // Only activate the observer after the user has scrolled at least once.
+  // Until then, ignore intersection events entirely.
+  let userHasScrolled = false;
+  const onScroll = () => { userHasScrolled = true; };
+  feedList.addEventListener('scroll', onScroll, { once: true });
+
+  scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const id = entry.target.dataset.id;
+      if (!id) return;
+      // Skip articles that were already in view when the page loaded,
+      // unless the user has since scrolled (which refreshes what counts).
+      if (initiallyVisible.has(id) && !userHasScrolled) return;
+
+      const art = articles.find(a => a.id === id);
+      if (!art || art.read) return;
+
+      if (entry.isIntersecting) {
+        scrollTimers[id] = setTimeout(() => {
+          art.read = true;
+          readArticles.add(id);
+          saveAll();
+          updateCounts();
+          fadeAndArchive(id);
+        }, 2000); // 2 s of continuous visibility required
+      } else {
+        clearTimeout(scrollTimers[id]);
+        delete scrollTimers[id];
+      }
+    });
+  }, { root: feedList, threshold: 0.75 }); // 75 % of the card must be visible
+
+  document.querySelectorAll('[data-id]').forEach(el => {
+    const art = articles.find(a => a.id === el.dataset.id);
+    if (art && !art.read) scrollObserver.observe(el);
+  });
+}
+
+function markAllRead() {
+  const toArchive = articles.filter(a => !a.read).map(a => a.id);
+  articles.forEach(a => { a.read = true; readArticles.add(a.id); });
+  saveAll();
+  updateCounts();
+  toArchive.forEach(id => fadeAndArchive(id));
+  setStatus(`${toArchive.length} artikelen gearchiveerd.`);
+}
+
+function toggleMarkOnScroll() {
+  markOnScroll = !markOnScroll;
+  localStorage.setItem('rss_mark_on_scroll', markOnScroll);
+  const btn = document.getElementById('scroll-read-btn');
+  btn.classList.toggle('active', markOnScroll);
+  btn.innerHTML = markOnScroll ? '<i class="ti ti-eye"></i> Scroll=gelezen' : '<i class="ti ti-eye-off"></i> Scroll=gelezen';
+  if (markOnScroll) initScrollObserver(); else if (scrollObserver) scrollObserver.disconnect();
+}
+
+/* ── Search ── */
+let searchQuery = '';
+
+function openSearch() {
+  document.getElementById('search-bar').classList.remove('hidden');
+  document.getElementById('search-input').focus();
+}
+function closeSearch() {
+  document.getElementById('search-bar').classList.add('hidden');
+  searchQuery = '';
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-meta').textContent = '';
+  if (currentFilter === 'search') filterFeed('all');
+}
+function onSearchInput(val) {
+  searchQuery = val.trim().toLowerCase();
+  if (searchQuery.length < 2) { document.getElementById('search-meta').textContent = ''; if (currentFilter === 'search') filterFeed('all'); return; }
+  currentFilter = 'search';
+  document.querySelectorAll('.sidebar-item,.cat-header,.cat-feed-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('topbar-title').textContent = `Zoekresultaten voor "${val.trim()}"`;
+  renderSearchResults();
+}
+function renderSearchResults() {
+  const q = searchQuery;
+  const list = document.getElementById('feed-list');
+  const matchArticle = a => a.title.toLowerCase().includes(q) || a.desc.toLowerCase().includes(q) || a.feedName.toLowerCase().includes(q);
+  const liveHits  = articles.filter(matchArticle);
+  const archHits  = archive.filter(matchArticle);
+  document.getElementById('search-meta').textContent = `${liveHits.length + archHits.length} resultaten`;
+  if (!liveHits.length && !archHits.length) { list.innerHTML = `<div class="loading-state"><i class="ti ti-search"></i><div>Geen resultaten voor "${q}"</div></div>`; return; }
+  const liveCards = liveHits.map(a => ({ type:'article', date:a.pubDate, obj:a }));
+  const archCards = archHits.map(a => ({ type:'article', date:new Date(a.pubDate), obj:{...a,read:true} }));
+  const all = [...liveCards, ...archCards].sort((a,b) => b.date - a.date);
+
+  let html = '';
+  if (viewMode === 'list') {
+    html = `<div class="magazine-grid view-list">`;
+    if (liveCards.length) html += `<div class="date-divider" style="grid-column:1/-1;padding:12px 2px 6px;font-size:9px;font-weight:700;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">Actief (${liveCards.length})</div>` + liveCards.map(d=>renderListCard(d.obj)).join('');
+    if (archCards.length) html += `<div class="date-divider" style="grid-column:1/-1;padding:12px 2px 6px;font-size:9px;font-weight:700;letter-spacing:1px;color:var(--muted);border-bottom:1px solid var(--border)">Archief (${archCards.length})</div>` + archCards.map(d=>renderListCard(d.obj)).join('');
+    html += `</div>`;
+  } else {
+    html = `<div class="magazine-grid view-magazine">`;
+    const heroItem = all[0];
+    if (heroItem) html += renderHeroCard(heroItem.obj);
+    html += all.slice(1).map(d => renderMagCard(d.obj)).join('') + `</div>`;
+  }
+  list.innerHTML = html;
+  list.querySelectorAll('[data-id]').forEach(el=>el.addEventListener('click',function(e){ openDetail(this.dataset.id); }));
+}
+
+
+/* ══════════════════════════════════════════════
+   Google Drive OAuth 2.0 — archief sync
+   ══════════════════════════════════════════════ */
+
+function setDriveStatus(msg, isError) {
+  const el = document.getElementById('drive-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? '#c0392b' : (msg.startsWith('✓') ? '#27ae60' : 'var(--muted)');
+}
+
+function updateDriveUI() {
+  const btn = document.getElementById('drive-btn');
+  const icon = btn?.querySelector('i');
+  if (driveToken && driveFileId) {
+    if (icon) icon.style.color = '#27ae60';
+    setDriveStatus('● Drive verbonden');
+  } else if (driveToken) {
+    if (icon) icon.style.color = '#f39c12';
+    setDriveStatus('◑ Drive: ingelogd, archief aanmaken...');
+  } else {
+    if (icon) icon.style.color = 'var(--muted)';
+    setDriveStatus('○ Drive niet verbonden — klik om te koppelen');
+  }
+}
+
+/* ── OAuth popup via Google Identity Services ── */
+function loadGoogleGIS() {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.oauth2) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Kon Google Sign-In bibliotheek niet laden'));
+    document.head.appendChild(s);
+  });
+}
+
+async function getAccessToken() {
+  if (driveToken) return driveToken;
+  if (!GOOGLE_CLIENT_ID) {
+    const id = prompt('Plak hier je Google OAuth Client ID:\n(Zie de instructies onderaan de pagina)');
+    if (!id || !id.includes('.apps.googleusercontent.com')) {
+      throw new Error('Geen geldig Client ID ingevoerd');
+    }
+    localStorage.setItem('rss_google_client_id', id);
+    location.reload(); // reload so GOOGLE_CLIENT_ID is set
+    return;
+  }
+  await loadGoogleGIS();
+  return new Promise((resolve, reject) => {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (resp) => {
+        if (resp.error) { reject(new Error(resp.error)); return; }
+        driveToken = resp.access_token;
+        // Token expires in ~1 hour; clear it so next call re-authenticates
+        setTimeout(() => { driveToken = null; updateDriveUI(); }, (resp.expires_in - 60) * 1000);
+        resolve(driveToken);
+      }
+    });
+    client.requestAccessToken({ prompt: driveFileId ? '' : 'consent' });
+  });
+}
+
+/* ── Drive REST helpers ── */
+async function driveRequest(method, url, body, contentType) {
+  const token = await getAccessToken();
+  const headers = { 'Authorization': 'Bearer ' + token };
+  if (contentType) headers['Content-Type'] = contentType;
+  const resp = await fetch(url, { method, headers, body });
+  if (!resp.ok) {
+    const err = await resp.text();
+    throw new Error(`Drive API ${resp.status}: ${err.slice(0, 120)}`);
+  }
+  return resp.headers.get('content-type')?.includes('json') ? resp.json() : resp.text();
+}
+
+async function findOrCreateArchiveFile() {
+  // Search for existing file by name
+  const q = encodeURIComponent("name='lezer-archief.json' and trashed=false");
+  const list = await driveRequest('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&spaces=drive`);
+  if (list.files?.length) {
+    driveFileId = list.files[0].id;
+    localStorage.setItem('rss_drive_file_id', driveFileId);
+    return driveFileId;
+  }
+  // Create new file with empty archive
+  const meta = JSON.stringify({ name: 'lezer-archief.json', mimeType: 'application/json' });
+  const body = JSON.stringify([]);
+  const boundary = 'lezer_boundary_xyz';
+  const multipart = `--${boundary}\r\nContent-Type: application/json\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+  const created = await driveRequest('POST',
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+    multipart, `multipart/related; boundary=${boundary}`);
+  driveFileId = created.id;
+  localStorage.setItem('rss_drive_file_id', driveFileId);
+  return driveFileId;
+}
+
+async function syncArchiveToDrive() {
+  if (driveSyncBusy) return;
+  driveSyncBusy = true;
+  try {
+    await getAccessToken();
+    if (!driveFileId) await findOrCreateArchiveFile();
+    const payload = JSON.stringify(archive.slice(0, 1500));
+    await driveRequest('PATCH',
+      `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=media`,
+      payload, 'application/json');
+    setDriveStatus(`✓ ${archive.length} artikelen gesynchroniseerd`);
+    setTimeout(updateDriveUI, 3000);
+  } catch(e) {
+    console.warn('Drive sync:', e.message);
+    setDriveStatus('⚠ Drive sync mislukt — ' + e.message, true);
+  }
+  driveSyncBusy = false;
+}
+
+async function loadArchiveFromDrive() {
+  try {
+    await getAccessToken();
+    if (!driveFileId) await findOrCreateArchiveFile();
+    setDriveStatus('Archief laden van Drive...');
+    const raw = await driveRequest('GET',
+      `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`);
+    const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (Array.isArray(data)) {
+      archive = data;
+      localStorage.setItem('rss_archive', JSON.stringify(archive));
+      updateCounts();
+      setDriveStatus(`✓ ${archive.length} artikelen geladen van Drive`);
+      setTimeout(updateDriveUI, 3000);
+      return true;
+    }
+  } catch(e) {
+    console.warn('Drive load:', e.message);
+    setDriveStatus('⚠ Laden mislukt — ' + e.message, true);
+  }
+  return false;
+}
+
+function scheduleDriveSync() {
+  clearTimeout(driveSyncTimer);
+  driveSyncTimer = setTimeout(syncArchiveToDrive, 4000);
+}
+
+async function connectDrive() {
+  if (!GOOGLE_CLIENT_ID) {
+    document.getElementById('oauth-instructions').style.display = 'flex';
+    return;
+  }
+  try {
+    setDriveStatus('Inloggen bij Google...');
+    await loadArchiveFromDrive();
+    updateDriveUI();
+  } catch(e) {
+    setDriveStatus('⚠ ' + e.message, true);
+  }
+}
+
+updateDriveUI();
+if (GOOGLE_CLIENT_ID && driveFileId) {
+  // Silently refresh archive on page load if already connected before
+  setTimeout(async () => {
+    try { await loadArchiveFromDrive(); updateDriveUI(); } catch(e) {}
+  }, 1000);
+}
+
+renderSidebar();
+renderFeed();
+if (feeds.length > 0) setTimeout(refreshFeeds, 300);
+</script>
+
+<!-- Google OAuth setup instructions -->
+<div id="oauth-instructions" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:12px;padding:28px;max-width:560px;width:94vw;max-height:88vh;overflow-y:auto;border:1px solid var(--border)">
+    <h3 style="font-family:var(--serif);font-size:18px;margin-bottom:6px">Google Drive koppelen</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:18px">Volg deze stappen eenmalig om een gratis OAuth Client ID aan te maken.</p>
+
+    <ol style="font-size:13px;line-height:2;padding-left:18px;color:var(--text)">
+      <li>Ga naar <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent)">console.cloud.google.com</a> en log in.</li>
+      <li>Maak een nieuw project aan (of kies een bestaand). Naam maakt niet uit, bijv. <em>Lezer</em>.</li>
+      <li>Ga naar <strong>APIs &amp; Services → Library</strong> en zoek op <em>Google Drive API</em>. Klik <strong>Enable</strong>.</li>
+      <li>Ga naar <strong>APIs &amp; Services → OAuth consent screen</strong>.<br>
+          Kies <em>External</em>, vul een app-naam in (bijv. <em>Lezer</em>), en sla op.<br>
+          Bij <em>Scopes</em>: voeg <code style="background:var(--bg);padding:1px 5px;border-radius:3px">.../auth/drive.file</code> toe.<br>
+          Bij <em>Test users</em>: voeg je eigen Google-e-mailadres toe.</li>
+      <li>Ga naar <strong>APIs &amp; Services → Credentials</strong>.<br>
+          Klik <strong>+ Create Credentials → OAuth client ID</strong>.<br>
+          Kies als type: <strong>Web application</strong>.<br>
+          Voeg onder <em>Authorized JavaScript origins</em> toe: <code style="background:var(--bg);padding:1px 5px;border-radius:3px">null</code> (voor lokaal bestand) én <code style="background:var(--bg);padding:1px 5px;border-radius:3px">http://localhost</code>.</li>
+      <li>Klik <strong>Create</strong>. Kopieer de <strong>Client ID</strong> (eindigt op <code style="background:var(--bg);padding:1px 5px;border-radius:3px">.apps.googleusercontent.com</code>).</li>
+      <li>Klik hieronder op <em>Client ID invoeren</em> en plak hem in.</li>
+    </ol>
+
+    <div style="margin-top:20px;display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="document.getElementById('oauth-instructions').style.display='none'" style="padding:7px 16px;border-radius:6px;font-size:13px;font-family:var(--sans);cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text)">Sluiten</button>
+      <button onclick="document.getElementById('oauth-instructions').style.display='none';connectDrive()" style="padding:7px 16px;border-radius:6px;font-size:13px;font-family:var(--sans);cursor:pointer;border:none;background:var(--accent);color:#fff">Client ID invoeren</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
