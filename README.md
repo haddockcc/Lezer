@@ -1,4 +1,3 @@
-[RSSlezer.html](https://github.com/user-attachments/files/28435509/RSSlezer.html)
 <!DOCTYPE html>
 <html lang="nl">
 <head>
