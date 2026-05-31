@@ -1,5 +1,5 @@
-[RSSlezer.html](https://github.com/user-attachments/files/28435144/RSSlezer.html)
-# Lezer<!DOCTYPE html>
+[RSSlezer.html](https://github.com/user-attachments/files/28435509/RSSlezer.html)
+<!DOCTYPE html>
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
@@ -401,7 +401,7 @@ let driveToken     = null;   // OAuth access token (in-memory only)
 let driveSyncTimer = null;
 let driveSyncBusy  = false;
 // ↓ Paste your Google OAuth Client ID here after setup
-const GOOGLE_CLIENT_ID = localStorage.getItem('rss_google_client_id') || '';
+const GOOGLE_CLIENT_ID = localStorage.getItem('rss_google_client_id') || '301465349226-ki6jlssgdeee5e3jms9ghhrmk36hlpju.apps.googleusercontent.com';
 let feeds      = JSON.parse(localStorage.getItem('rss_feeds')      || '[]');
 let categories = JSON.parse(localStorage.getItem('rss_categories') || '[]');
 let articles   = [];
