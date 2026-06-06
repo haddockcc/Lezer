@@ -62,6 +62,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .cat-feeds.open { display: block; }
 .cat-feed-item { display: flex; align-items: center; gap: 6px; padding: 5px 14px 5px 28px; font-size: 11px; color: var(--muted); cursor: pointer; transition: background 0.1s; }
 .cat-feed-item:hover { background: var(--bg); color: var(--text); }
+.cat-feed-item:hover .feed-delete-btn { opacity: 1 !important; }
 .cat-feed-item.active { color: var(--accent); font-weight: 600; }
 .cat-feed-item.drag-over { background: var(--tag-bg); outline: 1px dashed var(--accent); }
 .feed-favicon { width: 13px; height: 13px; border-radius: 2px; flex-shrink: 0; }
@@ -416,6 +417,21 @@ let dragFeedId = null;
 let scrollObserver = null;
 const scrollTimers = {};
 
+function deleteFeed(feedId, event) {
+  event.stopPropagation();
+  const feed = feeds.find(f => f.id === feedId);
+  if (!feed) return;
+  if (!confirm(`Feed "${feed.name}" verwijderen?`)) return;
+  feeds = feeds.filter(f => f.id !== feedId);
+  categories.forEach(c => { c.feedIds = c.feedIds.filter(id => id !== feedId); });
+  articles = articles.filter(a => a.feedId !== feedId);
+  saveAll();
+  updateCounts();
+  renderSidebar();
+  if (currentFilter === 'feed:' + feedId) filterFeed('all');
+  else renderFeed();
+}
+
 function saveAll() {
   localStorage.setItem('rss_feeds',      JSON.stringify(feeds));
   localStorage.setItem('rss_categories', JSON.stringify(categories));
@@ -669,6 +685,7 @@ function renderSidebar() {
         <img class="feed-favicon" src="${fav}" onerror="this.style.display='none'" alt="">
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
         <span class="count">${cnt}</span>
+        <button onclick="deleteFeed(${f.id}, event)" title="Verwijderen" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;opacity:0;transition:opacity 0.15s" class="feed-delete-btn"><i class="ti ti-x"></i></button>
       </div>`;
     }).join('');
     return `<div class="cat-group">
@@ -707,6 +724,7 @@ function renderSidebar() {
       <img class="feed-favicon" src="${fav}" onerror="this.style.display='none'" alt="">
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
       <span class="count">${cnt}</span>
+      <button onclick="deleteFeed(${f.id}, event)" title="Verwijderen" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;opacity:0;transition:opacity 0.15s" class="feed-delete-btn"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 
