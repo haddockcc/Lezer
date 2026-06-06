@@ -783,20 +783,42 @@ async function refreshFeeds() {
 }
 
 async function clusterArticles() {
-  const titles = articles.map((a,i) => `${i}: ${a.title}`).join('\n');
+  // Send title + first 80 chars of description for better context
+  const input = articles.map((a,i) => {
+    const snippet = a.desc ? ' — ' + a.desc.slice(0, 80).replace(/\n/g,' ') : '';
+    return `${i}: ${a.title}${snippet}`;
+  }).join('\n');
+
+  const systemPrompt = `Je bent een nieuwsclusteringsassistent voor een Nederlandse RSS-reader.
+Je taak: groepeer artikelen die over HETZELFDE nieuwsfeit of HETZELFDE onderwerp gaan.
+
+Regels:
+- Groepeer artikelen samen als ze hetzelfde nieuwsfeit beschrijven, ook als de titels anders geformuleerd zijn (bijv. "Marcouch nodigt Ye uit" en "Burgemeester Arnhem vraagt rapper naar holocaustmuseum" gaan over hetzelfde).
+- Wees RUIMHARTIG: bij twijfel liever te veel clusteren dan te weinig.
+- Een cluster mag artikelen van dezelfde bron bevatten als ze echt over hetzelfde gaan.
+- Minimaal 2 artikelen per cluster.
+- Reageer ALLEEN met geldige JSON, geen uitleg, geen markdown.
+- Formaat: {"clusters":[{"indices":[0,1,2],"topic":"korte omschrijving in max 5 woorden"}]}`;
+
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
       headers:{ 'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000,
-        system:'Je bent een nieuwsclusteringsassistent. Identificeer groepen van 2+ artikelen over hetzelfde onderwerp. Reageer ALLEEN in JSON: {"clusters":[{"indices":[0,1],"topic":"omschrijving"}]}.',
-        messages:[{ role:'user', content:`Cluster:\n${titles}` }] })
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:2000,
+        system: systemPrompt,
+        messages:[{ role:'user', content:`Groepeer deze artikelen:\n\n${input}` }]
+      })
     });
     const data = await resp.json();
-    if (data.error) { clusters=[]; return; }
-    const parsed = JSON.parse((data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim());
-    clusters = (parsed.clusters||[]).map(c => ({ topic:c.topic, articles: c.indices.map(i=>articles[i]).filter(Boolean) })).filter(c=>c.articles.length>=2);
-  } catch(e) { clusters=[]; }
+    if (data.error) { console.warn('Cluster API error:', data.error); clusters=[]; return; }
+    const raw = (data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(raw);
+    clusters = (parsed.clusters||[])
+      .map(c => ({ topic:c.topic, articles: c.indices.map(i=>articles[i]).filter(Boolean) }))
+      .filter(c=>c.articles.length>=2);
+  } catch(e) { console.warn('Cluster error:', e); clusters=[]; }
 }
 
 function getClusteredIds() { const s=new Set(); clusters.forEach(c=>c.articles.forEach(a=>s.add(a.id))); return s; }
