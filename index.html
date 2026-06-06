@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
@@ -30,10 +31,10 @@
     --cluster-bg: #201e10; --cluster-border: #6a5a20;
   }
 }
-body { font-family: var(--sans); background: var(--bg); color: var(--text); height: 100vh; display: flex; overflow: hidden; font-size: 14px; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); height: 100vh; min-height: 100vh; display: flex; flex-direction: row; overflow: hidden; font-size: 14px; margin: 0; }
 
 /* Sidebar */
-#sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+#sidebar { width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
 #sidebar-header { padding: 18px 16px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
 #sidebar-logo { font-family: var(--serif); font-size: 20px; font-weight: 900; letter-spacing: -0.5px; color: var(--accent); flex: 1; }
 .sidebar-section { padding: 4px 0; }
@@ -73,7 +74,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .add-feed-btn:hover { opacity: 0.85; }
 
 /* Main */
-#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 #topbar { padding: 11px 18px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 #topbar h2 { font-family: var(--serif); font-size: 17px; font-weight: 700; flex: 1; letter-spacing: -0.3px; }
 .topbar-btn { background: none; border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.15s; white-space: nowrap; font-family: var(--sans); }
