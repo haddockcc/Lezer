@@ -419,6 +419,16 @@ let dragFeedId = null;
 let scrollObserver = null;
 const scrollTimers = {};
 
+function toggleCat(catId) {
+  const feedsEl  = document.getElementById('catfeeds-' + catId);
+  const chevron  = document.getElementById('chevron-'  + catId);
+  const hdr      = document.getElementById('nav-cat-'  + catId);
+  if (!feedsEl) return;
+  const isOpen = feedsEl.classList.toggle('open');
+  if (chevron) chevron.classList.toggle('open', isOpen);
+  if (hdr)     hdr.classList.toggle('active', isOpen);
+}
+
 function deleteFeed(feedId, event) {
   event.stopPropagation();
   const feed = feeds.find(f => f.id === feedId);
@@ -691,30 +701,15 @@ function renderSidebar() {
       </div>`;
     }).join('');
     return `<div class="cat-group">
-      <div class="cat-header cat-drop-zone" data-cat-id="${cat.id}" onclick="filterFeed('cat:${cat.id}')" id="nav-cat-${cat.id}">
-        <span class="cat-dot" style="background:${cat.color}"></span>
-        <span class="cat-name">${cat.name}</span>
-        <span class="cat-count">${catArticleCount}</span>
-        <i class="ti ti-chevron-down cat-chevron" id="chevron-${cat.id}"></i>
+      <div class="cat-header cat-drop-zone" data-cat-id="${cat.id}" id="nav-cat-${cat.id}">
+        <span class="cat-dot" style="background:${cat.color}" onclick="toggleCat(${cat.id})"></span>
+        <span class="cat-name" onclick="filterFeed('cat:${cat.id}')" style="flex:1">${cat.name}</span>
+        <span class="cat-count" onclick="toggleCat(${cat.id})">${catArticleCount}</span>
+        <i class="ti ti-chevron-down cat-chevron" id="chevron-${cat.id}" onclick="toggleCat(${cat.id})"></i>
       </div>
       <div class="cat-feeds" id="catfeeds-${cat.id}">${feedItems}</div>
     </div>`;
   }).join('');
-
-  // Toggle cat open/close
-  categories.forEach(cat => {
-    const hdr = document.getElementById(`nav-cat-${cat.id}`);
-    const chevron = document.getElementById(`chevron-${cat.id}`);
-    const feedsEl = document.getElementById(`catfeeds-${cat.id}`);
-    if (hdr && feedsEl) {
-      hdr.addEventListener('click', function(e) {
-        if (e.target.classList.contains('cat-drop-zone') || e.target === hdr) {
-          const isOpen = feedsEl.classList.toggle('open');
-          chevron?.classList.toggle('open', isOpen);
-        }
-      });
-    }
-  });
 
   // Uncategorised feeds
   const uncatFeeds = feeds.filter(f => !categories.some(c => c.feedIds.includes(f.id)));
