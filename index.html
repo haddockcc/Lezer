@@ -60,7 +60,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .cat-count { font-size: 10px; color: var(--muted); flex-shrink: 0; }
 .cat-feeds { display: none; }
 .cat-feeds.open { display: block; }
-.cat-feed-item { display: flex; align-items: center; gap: 6px; padding: 5px 14px 5px 28px; font-size: 11px; color: var(--muted); cursor: pointer; transition: background 0.1s; }
+.cat-feed-item { display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 28px; font-size: 11px; color: var(--muted); cursor: pointer; transition: background 0.1s; min-width: 0; }
 .cat-feed-item:hover { background: var(--bg); color: var(--text); }
 .cat-feed-item:hover .feed-delete-btn { opacity: 1 !important; }
 .cat-feed-item.active { color: var(--accent); font-weight: 600; }
@@ -311,6 +311,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
     <button class="topbar-btn active" onclick="toggleMarkOnScroll()" id="scroll-read-btn"><i class="ti ti-eye"></i> Scroll=gelezen</button>
     <button class="topbar-btn" onclick="markAllRead()" title="Alles als gelezen markeren"><i class="ti ti-checks"></i> Alles gelezen</button>
     <button class="topbar-btn" onclick="openSearch()" id="search-btn"><i class="ti ti-search"></i> Zoeken</button>
+    <button class="topbar-btn" onclick="cycleFeedLimit()" id="limit-btn"><i class="ti ti-list-numbers"></i> 20 per feed</button>
   </div>
   <div id="feed-list">
     <div class="loading-state"><i class="ti ti-rss"></i><div>Voeg feeds toe om te beginnen</div></div>
@@ -411,6 +412,7 @@ let currentFilter = 'all';
 let dedupEnabled  = true;
 let viewMode = localStorage.getItem('rss_view') || 'magazine';
 let markOnScroll = localStorage.getItem('rss_mark_on_scroll') !== 'false';
+let feedLimit    = parseInt(localStorage.getItem('rss_feed_limit') || '20');
 let listDensity  = localStorage.getItem('rss_list_density') || 'compact'; // compact | comfortable | spacious
 let apiKey   = localStorage.getItem('anthropic_api_key') || '';
 let dragFeedId = null;
@@ -683,9 +685,9 @@ function renderSidebar() {
       const fav = `https://www.google.com/s2/favicons?domain=${new URL(f.url).hostname}&sz=16`;
       return `<div class="cat-feed-item cat-feed-draggable" data-feed-id="${f.id}" onclick="filterFeed('feed:${f.id}')" id="nav-feed-${f.id}">
         <img class="feed-favicon" src="${fav}" onerror="this.style.display='none'" alt="">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
-        <span class="count">${cnt}</span>
-        <button onclick="deleteFeed(${f.id}, event)" title="Verwijderen" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;opacity:0;transition:opacity 0.15s" class="feed-delete-btn"><i class="ti ti-x"></i></button>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${f.name}</span>
+        <span class="count" style="flex-shrink:0">${cnt}</span>
+        <button onclick="deleteFeed(${f.id}, event)" title="Verwijderen" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:12px;padding:0 3px;opacity:0;transition:opacity 0.15s;flex-shrink:0" class="feed-delete-btn"><i class="ti ti-x"></i></button>
       </div>`;
     }).join('');
     return `<div class="cat-group">
@@ -722,9 +724,9 @@ function renderSidebar() {
     const fav = `https://www.google.com/s2/favicons?domain=${new URL(f.url).hostname}&sz=16`;
     return `<div class="cat-feed-item cat-feed-draggable" data-feed-id="${f.id}" onclick="filterFeed('feed:${f.id}')" id="nav-feed-${f.id}">
       <img class="feed-favicon" src="${fav}" onerror="this.style.display='none'" alt="">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
-      <span class="count">${cnt}</span>
-      <button onclick="deleteFeed(${f.id}, event)" title="Verwijderen" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px;opacity:0;transition:opacity 0.15s" class="feed-delete-btn"><i class="ti ti-x"></i></button>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">${f.name}</span>
+      <span class="count" style="flex-shrink:0">${cnt}</span>
+      <button onclick="deleteFeed(${f.id}, event)" title="Verwijderen" style="background:none;border:none;cursor:pointer;color:#c0392b;font-size:12px;padding:0 3px;opacity:0;transition:opacity 0.15s;flex-shrink:0" class="feed-delete-btn"><i class="ti ti-x"></i></button>
     </div>`;
   }).join('');
 
@@ -755,7 +757,7 @@ async function fetchFeed(feed) {
       if (xml.querySelector('parsererror')) continue;
       const items = [...xml.querySelectorAll('item, entry')];
       if (!items.length) continue;
-      return items.slice(0, 20).map(item => {
+      return items.slice(0, feedLimit).map(item => {
         const title = item.querySelector('title')?.textContent?.trim() || '(geen titel)';
         const link  = item.querySelector('link')?.textContent?.trim() || item.querySelector('link')?.getAttribute('href') || '#';
         const desc  = (item.querySelector('description, summary, content')?.textContent || '').replace(/<[^>]+>/g,'').trim().slice(0,400);
@@ -1022,6 +1024,15 @@ function toggleMarkOnScroll() {
   btn.classList.toggle('active', markOnScroll);
   btn.innerHTML = markOnScroll ? '<i class="ti ti-eye"></i> Scroll=gelezen' : '<i class="ti ti-eye-off"></i> Scroll=gelezen';
   if (markOnScroll) initScrollObserver(); else if (scrollObserver) scrollObserver.disconnect();
+}
+
+/* ── Feed limit ── */
+function cycleFeedLimit() {
+  const options = [20, 50, 100];
+  feedLimit = options[(options.indexOf(feedLimit) + 1) % options.length];
+  localStorage.setItem('rss_feed_limit', feedLimit);
+  document.getElementById('limit-btn').innerHTML = `<i class="ti ti-list-numbers"></i> ${feedLimit} per feed`;
+  refreshFeeds();
 }
 
 /* ── Search ── */
