@@ -318,6 +318,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
     <button class="topbar-btn" onclick="markAllRead()" title="Alles als gelezen markeren"><i class="ti ti-checks"></i> Alles gelezen</button>
     <button class="topbar-btn" onclick="openSearch()" id="search-btn"><i class="ti ti-search"></i> Zoeken</button>
     <button class="topbar-btn" onclick="cycleFeedLimit()" id="limit-btn"><i class="ti ti-list-numbers"></i> 20 per feed</button>
+    <button class="topbar-btn active" onclick="cycleDateFilter()" id="date-filter-btn"><i class="ti ti-calendar-time"></i> 24 uur</button>
   </div>
   <div id="feed-list">
     <div class="loading-state"><i class="ti ti-rss"></i><div>Voeg feeds toe om te beginnen</div></div>
@@ -421,6 +422,7 @@ let dedupEnabled  = true;
 let viewMode = localStorage.getItem('rss_view') || 'magazine';
 let markOnScroll = localStorage.getItem('rss_mark_on_scroll') !== 'false';
 let feedLimit    = parseInt(localStorage.getItem('rss_feed_limit') || '20');
+let dateFilter   = parseInt(localStorage.getItem('rss_date_filter') || '24'); // hours, 0 = no filter
 let listDensity  = localStorage.getItem('rss_list_density') || 'compact'; // compact | comfortable | spacious
 let apiKey   = localStorage.getItem('anthropic_api_key') || '';
 let dragFeedId = null;
@@ -581,6 +583,14 @@ function saveApiKey() {
 /* ── View toggle ── */
 applyView();
 applyDensity();
+(function applyDateFilterBtn() {
+  const labels = { 24:'24 uur', 48:'48 uur', 72:'3 dagen', 168:'7 dagen', 0:'Alle tijd' };
+  const btn = document.getElementById('date-filter-btn');
+  if (btn) {
+    btn.innerHTML = `<i class="ti ti-calendar-time"></i> ${labels[dateFilter] || dateFilter+' uur'}`;
+    btn.classList.toggle('active', dateFilter !== 0);
+  }
+})();
 function applyDensity() {
   const feedList = document.getElementById('feed-list');
   feedList.classList.remove('density-comfortable','density-spacious');
@@ -981,7 +991,17 @@ function renderFeed() {
     pool = saved.map(a=>({type:'article',date:new Date(a.pubDate),obj:{...a,read:true,isSaved:true}}));
   }
 
-  if (!pool.length) { list.innerHTML=`<div class="loading-state"><i class="ti ti-check"></i><div>Niets te tonen</div></div>`; return; }
+  // Apply date filter (not for archive/saved views)
+  if (currentFilter !== 'archive' && currentFilter !== 'saved') {
+    pool = applyDateFilter(pool);
+  }
+
+  if (!pool.length) {
+    const labels = { 24:'24 uur', 48:'48 uur', 72:'3 dagen', 168:'7 dagen', 0:'Alle tijd' };
+    const filterMsg = dateFilter ? ` in de laatste ${labels[dateFilter]}` : '';
+    list.innerHTML=`<div class="loading-state"><i class="ti ti-calendar-time"></i><div>Geen artikelen${filterMsg}</div></div>`;
+    return;
+  }
 
   if (viewMode==='list') {
     list.innerHTML = `<div class="magazine-grid view-list">${pool.map(item=>item.type==='cluster'?renderClusterList(item.obj):renderListCard(item.obj)).join('')}</div>`;
@@ -1160,6 +1180,27 @@ function cycleFeedLimit() {
   localStorage.setItem('rss_feed_limit', feedLimit);
   document.getElementById('limit-btn').innerHTML = `<i class="ti ti-list-numbers"></i> ${feedLimit} per feed`;
   refreshFeeds();
+}
+
+/* ── Date filter ── */
+function cycleDateFilter() {
+  const options = [24, 48, 72, 168, 0]; // hours; 0 = all
+  const labels  = { 24:'24 uur', 48:'48 uur', 72:'3 dagen', 168:'7 dagen', 0:'Alle tijd' };
+  dateFilter = options[(options.indexOf(dateFilter) + 1) % options.length];
+  localStorage.setItem('rss_date_filter', dateFilter);
+  const btn = document.getElementById('date-filter-btn');
+  btn.innerHTML = `<i class="ti ti-calendar-time"></i> ${labels[dateFilter]}`;
+  btn.classList.toggle('active', dateFilter !== 0);
+  renderFeed();
+}
+
+function applyDateFilter(pool) {
+  if (!dateFilter) return pool;
+  const cutoff = new Date(Date.now() - dateFilter * 60 * 60 * 1000);
+  return pool.filter(item => {
+    const d = item.date instanceof Date ? item.date : new Date(item.date);
+    return !isNaN(d) && d >= cutoff;
+  });
 }
 
 /* ── Search ── */
