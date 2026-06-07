@@ -311,7 +311,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
   <div id="topbar">
     <h2 id="topbar-title">Alle artikelen</h2>
     <button class="topbar-btn" onclick="refreshFeeds()" id="refresh-btn"><i class="ti ti-refresh"></i> Vernieuwen</button>
-    <button class="topbar-btn active" onclick="toggleDedup()" id="dedup-btn"><i class="ti ti-wand"></i> AI dedup</button>
+    <button class="topbar-btn" onclick="toggleDedup()" id="dedup-btn"><i class="ti ti-wand"></i> AI dedup</button>
     <button class="topbar-btn active" onclick="toggleView()" id="view-btn"><i class="ti ti-layout-grid"></i> Magazine</button>
     <button class="topbar-btn" onclick="cycleDensity()" id="density-btn" title="Tekstgrootte lijst"></button>
     <button class="topbar-btn active" onclick="toggleMarkOnScroll()" id="scroll-read-btn"><i class="ti ti-eye"></i> Scroll=gelezen</button>
@@ -336,12 +336,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
       <div id="detail-title"></div>
       <div id="detail-meta"></div>
       <div id="detail-desc"></div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap">
-        <a id="detail-link" href="#" target="_blank" style="margin-top:0"><i class="ti ti-external-link"></i> Volledig artikel</a>
-        <button id="translate-btn" onclick="translateDetail()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;font-size:11px;font-family:var(--sans);cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:all 0.15s">
-          <i class="ti ti-language"></i> Vertaal naar Nederlands
-        </button>
-      </div>
+      <a id="detail-link" href="#" target="_blank"><i class="ti ti-external-link"></i> Volledig artikel</a>
     </div>
   </div>
 </div>
@@ -391,9 +386,9 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 
 <script>
 const CORS_PROXIES = [
-  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
   url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
   url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
 ];
 const PRESET_FEEDS = [
   { name:'Nu.nl', url:'https://www.nu.nl/rss/algemeen' },
@@ -417,13 +412,14 @@ let driveSyncTimer = null;
 let driveSyncBusy  = false;
 // ↓ Paste your Google OAuth Client ID here after setup
 const GOOGLE_CLIENT_ID = localStorage.getItem('rss_google_client_id') || '301465349226-ki6jlssgdeee5e3jms9ghhrmk36hlpju.apps.googleusercontent.com';
+let articleCache = JSON.parse(localStorage.getItem('rss_article_cache') || '[]'); // last fetched articles
 let feeds      = JSON.parse(localStorage.getItem('rss_feeds')      || '[]');
 let categories = JSON.parse(localStorage.getItem('rss_categories') || '[]');
 let articles   = [];
 let clusters   = [];
 let readArticles = new Set(JSON.parse(localStorage.getItem('rss_read') || '[]'));
 let currentFilter = 'all';
-let dedupEnabled  = true;
+let dedupEnabled  = false;
 let viewMode = localStorage.getItem('rss_view') || 'magazine';
 let markOnScroll = localStorage.getItem('rss_mark_on_scroll') !== 'false';
 let feedLimit    = parseInt(localStorage.getItem('rss_feed_limit') || '20');
@@ -526,75 +522,6 @@ async function loadSavedFromDrive() {
   } catch(e) { console.warn('Load saved:', e.message); }
 }
 
-/* ── Translation ── */
-let currentDetailArticle = null; // store current article for translation
-
-async function translateDetail() {
-  if (!apiKey) {
-    alert('Voeg eerst een Anthropic API-sleutel in om de vertaalfunctie te gebruiken.');
-    return;
-  }
-  const btn = document.getElementById('translate-btn');
-  const titleEl = document.getElementById('detail-title');
-  const descEl  = document.getElementById('detail-desc');
-
-  // If already translated, restore original
-  if (btn.dataset.translated === 'true') {
-    if (currentDetailArticle) {
-      titleEl.textContent = currentDetailArticle.title;
-      descEl.textContent  = currentDetailArticle.desc || 'Geen beschrijving beschikbaar.';
-    }
-    btn.dataset.translated = 'false';
-    btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands';
-    return;
-  }
-
-  const title = titleEl.textContent;
-  const desc  = descEl.textContent;
-
-  // Check if already Dutch (simple heuristic)
-  const dutchWords = ['de','het','een','van','en','in','is','op','dat','zijn','voor','met','aan'];
-  const words = (title + ' ' + desc).toLowerCase().split(/\s+/);
-  const dutchCount = words.filter(w => dutchWords.includes(w)).length;
-  if (dutchCount >= 3) {
-    btn.innerHTML = '<i class="ti ti-check"></i> Al in het Nederlands';
-    setTimeout(() => { btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands'; }, 2000);
-    return;
-  }
-
-  btn.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px"></span> Vertalen...';
-  btn.disabled = true;
-
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: 'Je bent een professionele vertaler. Vertaal de gegeven tekst naar natuurlijk Nederlands. Behoud de toon en stijl. Reageer ALLEEN met geldige JSON: {"title":"vertaalde titel","desc":"vertaalde beschrijving"}. Geen uitleg, geen markdown.',
-        messages: [{ role:'user', content:`Vertaal naar Nederlands:
-
-Titel: ${title}
-
-Beschrijving: ${desc}` }]
-      })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error.message);
-    const parsed = JSON.parse((data.content?.[0]?.text || '{}').replace(/```json|```/g,'').trim());
-    if (parsed.title) titleEl.textContent = parsed.title;
-    if (parsed.desc)  descEl.textContent  = parsed.desc;
-    btn.dataset.translated = 'true';
-    btn.innerHTML = '<i class="ti ti-language-off"></i> Origineel tonen';
-    btn.disabled = false;
-  } catch(e) {
-    btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands';
-    btn.disabled = false;
-    setStatus('Vertaling mislukt: ' + e.message);
-  }
-}
-
 function toggleCat(catId) {
   const feedsEl  = document.getElementById('catfeeds-' + catId);
   const chevron  = document.getElementById('chevron-'  + catId);
@@ -626,6 +553,7 @@ function saveAll() {
   localStorage.setItem('rss_read',       JSON.stringify([...readArticles]));
   localStorage.setItem('rss_archive',    JSON.stringify(archive.slice(0, 1500)));
   localStorage.setItem('rss_saved',      JSON.stringify(saved));
+  if (articles.length) localStorage.setItem('rss_article_cache', JSON.stringify(articles.slice(0, 200)));
 }
 
 function archiveArticle(id) {
@@ -959,8 +887,7 @@ async function refreshFeeds() {
   const failed  = results.filter(r => !r.items.length).map(r => r.feed.name);
   articles = results.flatMap(r => r.items);
   articles.sort((a,b) => b.pubDate - a.pubDate);
-  if (dedupEnabled && apiKey && articles.length > 3) { setStatus('AI clustert...'); await clusterArticles(); }
-  else clusters = [];
+  clusters = []; // reset clusters; user can trigger manually via dedup button
   updateCounts(); renderSidebar(); renderFeed();
   document.getElementById('refresh-btn').innerHTML = '<i class="ti ti-refresh"></i> Vernieuwen';
   const failMsg = failed.length ? ` · Mislukt: ${failed.join(', ')}` : '';
@@ -1140,10 +1067,6 @@ function openDetail(id) {
   updateCounts();
 }
 function openDetailObj(a) {
-  currentDetailArticle = a;
-  // Reset translate button
-  const btn = document.getElementById('translate-btn');
-  if (btn) { btn.dataset.translated = 'false'; btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands'; btn.disabled = false; }
   const pubDate = a.pubDate instanceof Date ? a.pubDate : new Date(a.pubDate);
   document.getElementById('detail-hero').innerHTML = a.image
     ? `<img src="${a.image}" style="width:100%;height:100%;object-fit:cover" alt="">`
@@ -1156,15 +1079,6 @@ function openDetailObj(a) {
   document.getElementById('detail').classList.remove('hidden');
 }
 function closeDetail() { document.getElementById('detail').classList.add('hidden'); }
-
-function toggleDedup() {
-  dedupEnabled = !dedupEnabled;
-  const btn = document.getElementById('dedup-btn');
-  btn.classList.toggle('active', dedupEnabled);
-  btn.innerHTML = `<i class="ti ti-wand"></i> AI dedup${dedupEnabled?'':' (uit)'}`;
-  if (dedupEnabled && apiKey && articles.length) clusterArticles().then(()=>{ updateCounts(); renderFeed(); });
-  else { clusters=[]; renderFeed(); }
-}
 
 function formatTime(d) {
   if(!d||isNaN(d)) return '';
@@ -1504,8 +1418,15 @@ if (GOOGLE_CLIENT_ID && driveFileId) {
 }
 
 renderSidebar();
-renderFeed();
-if (feeds.length > 0) setTimeout(refreshFeeds, 300);
+// Show cached articles immediately
+if (articleCache.length) {
+  articles = articleCache.map(a => ({ ...a, pubDate: new Date(a.pubDate), read: readArticles.has(a.id) }));
+  updateCounts();
+  renderFeed();
+  setStatus(`${articles.length} artikelen uit cache — laden...`);
+}
+// Then refresh feeds in background
+if (feeds.length > 0) setTimeout(refreshFeeds, articleCache.length ? 800 : 100);
 </script>
 
 <!-- Google OAuth setup instructions -->
