@@ -936,9 +936,12 @@ Regels:
 function getClusteredIds() { const s=new Set(); clusters.forEach(c=>c.articles.forEach(a=>s.add(a.id))); return s; }
 
 function updateCounts() {
-  document.getElementById('count-all').textContent      = articles.filter(a=>!a.read).length;
+  // Apply date filter to counts so teller matches what's visible
+  const visiblePool = applyDateFilter(articles.map(a => ({ date: a.pubDate instanceof Date ? a.pubDate : new Date(a.pubDate), obj: a })));
+  const visibleUnread = visiblePool.filter(p => !p.obj.read).length;
+  document.getElementById('count-all').textContent      = visibleUnread;
   document.getElementById('count-clusters').textContent = clusters.length;
-  document.getElementById('count-unread').textContent   = articles.filter(a=>!a.read).length;
+  document.getElementById('count-unread').textContent   = visibleUnread;
   document.getElementById('count-archive').textContent  = archive.length;
   document.getElementById('count-saved').textContent    = saved.length;
 }
@@ -1184,6 +1187,35 @@ function cycleDateFilter() {
   btn.innerHTML = `<i class="ti ti-calendar-time"></i> ${labels[dateFilter]}`;
   btn.classList.toggle('active', dateFilter !== 0);
   renderFeed();
+}
+
+/* ── Deduplication ── */
+function toggleDedup() {
+  dedupEnabled = !dedupEnabled;
+  const btn = document.getElementById('dedup-btn');
+  btn.classList.toggle('active', dedupEnabled);
+  if (dedupEnabled) {
+    if (!apiKey) {
+      alert('Voeg eerst een Anthropic API-sleutel in via de gele balk (ververs de pagina om die te zien).');
+      dedupEnabled = false;
+      btn.classList.remove('active');
+      btn.innerHTML = '<i class="ti ti-wand"></i> AI dedup';
+      return;
+    }
+    btn.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px;margin-right:4px"></span> Clusteren...';
+    btn.disabled = true;
+    clusterArticles().then(() => {
+      updateCounts();
+      renderFeed();
+      btn.innerHTML = '<i class="ti ti-wand"></i> AI dedup';
+      btn.disabled = false;
+      setStatus(`${clusters.length} clusters gevonden.`);
+    });
+  } else {
+    clusters = [];
+    renderFeed();
+    btn.innerHTML = '<i class="ti ti-wand"></i> AI dedup';
+  }
 }
 
 function applyDateFilter(pool) {
