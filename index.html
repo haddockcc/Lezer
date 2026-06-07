@@ -336,7 +336,12 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
       <div id="detail-title"></div>
       <div id="detail-meta"></div>
       <div id="detail-desc"></div>
-      <a id="detail-link" href="#" target="_blank"><i class="ti ti-external-link"></i> Volledig artikel</a>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap">
+        <a id="detail-link" href="#" target="_blank" style="margin-top:0"><i class="ti ti-external-link"></i> Volledig artikel</a>
+        <button id="translate-btn" onclick="translateDetail()" style="display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:6px;font-size:11px;font-family:var(--sans);cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);transition:all 0.15s">
+          <i class="ti ti-language"></i> Vertaal naar Nederlands
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -519,6 +524,75 @@ async function loadSavedFromDrive() {
       updateCounts();
     }
   } catch(e) { console.warn('Load saved:', e.message); }
+}
+
+/* ── Translation ── */
+let currentDetailArticle = null; // store current article for translation
+
+async function translateDetail() {
+  if (!apiKey) {
+    alert('Voeg eerst een Anthropic API-sleutel in om de vertaalfunctie te gebruiken.');
+    return;
+  }
+  const btn = document.getElementById('translate-btn');
+  const titleEl = document.getElementById('detail-title');
+  const descEl  = document.getElementById('detail-desc');
+
+  // If already translated, restore original
+  if (btn.dataset.translated === 'true') {
+    if (currentDetailArticle) {
+      titleEl.textContent = currentDetailArticle.title;
+      descEl.textContent  = currentDetailArticle.desc || 'Geen beschrijving beschikbaar.';
+    }
+    btn.dataset.translated = 'false';
+    btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands';
+    return;
+  }
+
+  const title = titleEl.textContent;
+  const desc  = descEl.textContent;
+
+  // Check if already Dutch (simple heuristic)
+  const dutchWords = ['de','het','een','van','en','in','is','op','dat','zijn','voor','met','aan'];
+  const words = (title + ' ' + desc).toLowerCase().split(/\s+/);
+  const dutchCount = words.filter(w => dutchWords.includes(w)).length;
+  if (dutchCount >= 3) {
+    btn.innerHTML = '<i class="ti ti-check"></i> Al in het Nederlands';
+    setTimeout(() => { btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands'; }, 2000);
+    return;
+  }
+
+  btn.innerHTML = '<span class="spinner" style="width:11px;height:11px;border-width:2px"></span> Vertalen...';
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: 'Je bent een professionele vertaler. Vertaal de gegeven tekst naar natuurlijk Nederlands. Behoud de toon en stijl. Reageer ALLEEN met geldige JSON: {"title":"vertaalde titel","desc":"vertaalde beschrijving"}. Geen uitleg, geen markdown.',
+        messages: [{ role:'user', content:`Vertaal naar Nederlands:
+
+Titel: ${title}
+
+Beschrijving: ${desc}` }]
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const parsed = JSON.parse((data.content?.[0]?.text || '{}').replace(/```json|```/g,'').trim());
+    if (parsed.title) titleEl.textContent = parsed.title;
+    if (parsed.desc)  descEl.textContent  = parsed.desc;
+    btn.dataset.translated = 'true';
+    btn.innerHTML = '<i class="ti ti-language-off"></i> Origineel tonen';
+    btn.disabled = false;
+  } catch(e) {
+    btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands';
+    btn.disabled = false;
+    setStatus('Vertaling mislukt: ' + e.message);
+  }
 }
 
 function toggleCat(catId) {
@@ -1066,6 +1140,10 @@ function openDetail(id) {
   updateCounts();
 }
 function openDetailObj(a) {
+  currentDetailArticle = a;
+  // Reset translate button
+  const btn = document.getElementById('translate-btn');
+  if (btn) { btn.dataset.translated = 'false'; btn.innerHTML = '<i class="ti ti-language"></i> Vertaal naar Nederlands'; btn.disabled = false; }
   const pubDate = a.pubDate instanceof Date ? a.pubDate : new Date(a.pubDate);
   document.getElementById('detail-hero').innerHTML = a.image
     ? `<img src="${a.image}" style="width:100%;height:100%;object-fit:cover" alt="">`
