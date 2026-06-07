@@ -970,10 +970,10 @@ function renderFeed() {
 
   let pool = [];
   if (currentFilter === 'all') {
-    pool = articles.map(a=>({type:'article',date:a.pubDate,obj:a}));
+    pool = articles.filter(a=>!a.read).map(a=>({type:'article',date:a.pubDate,obj:a}));
     if (dedupEnabled && clusters.length) {
       const cids = getClusteredIds();
-      const stand = articles.filter(a=>!cids.has(a.id)).map(a=>({type:'article',date:a.pubDate,obj:a}));
+      const stand = articles.filter(a=>!a.read&&!cids.has(a.id)).map(a=>({type:'article',date:a.pubDate,obj:a}));
       const clus  = clusters.map(c=>({type:'cluster',date:c.articles[0].pubDate,obj:c}));
       pool = [...stand,...clus].sort((a,b)=>b.date-a.date);
     }
@@ -1064,7 +1064,20 @@ function openDetail(id) {
   const a = articles.find(x=>x.id===id); if(!a) return;
   const wasRead = a.read;
   a.read=true; readArticles.add(id); saveAll();
-  if (!wasRead) setTimeout(() => fadeAndArchive(id), 2000);
+  if (!wasRead) {
+    // Remove from active articles and archive after short delay
+    setTimeout(() => {
+      articles = articles.filter(x => x.id !== id);
+      if (!archive.find(x => x.id === id)) {
+        archive.unshift({ id:a.id, feedName:a.feedName, feedColor:a.feedColor||'#333', feedIcon:a.feedIcon||'ti-rss', title:a.title, desc:a.desc, link:a.link, image:a.image||null, pubDate:a.pubDate, archivedAt:new Date().toISOString() });
+        if (archive.length > 1500) archive.splice(1500);
+      }
+      saveAll();
+      updateCounts();
+      const el = document.querySelector('[data-id="'+id+'"]');
+      if (el) { el.classList.add('fading-out'); setTimeout(() => el.remove(), 500); }
+    }, 1500);
+  }
   openDetailObj(a);
   document.querySelector(`[data-id="${id}"]`)?.classList.remove('unread');
   updateCounts();
@@ -1190,6 +1203,25 @@ function cycleDateFilter() {
 }
 
 /* ── Deduplication ── */
+/* ── Auto-archive read articles ── */
+function autoArchiveRead() {
+  const toArchive = articles.filter(a => a.read);
+  toArchive.forEach(a => {
+    if (!archive.find(x => x.id === a.id)) {
+      archive.unshift({
+        id: a.id, feedName: a.feedName, feedColor: a.feedColor||'#333',
+        feedIcon: a.feedIcon||'ti-rss', title: a.title, desc: a.desc,
+        link: a.link, image: a.image||null, pubDate: a.pubDate,
+        archivedAt: new Date().toISOString()
+      });
+    }
+  });
+  if (archive.length > 1500) archive.splice(1500);
+  // Remove read articles from active list
+  articles = articles.filter(a => !a.read);
+  saveAll();
+}
+
 function toggleDedup() {
   dedupEnabled = !dedupEnabled;
   const btn = document.getElementById('dedup-btn');
@@ -1453,9 +1485,10 @@ renderSidebar();
 // Show cached articles immediately
 if (articleCache.length) {
   articles = articleCache.map(a => ({ ...a, pubDate: new Date(a.pubDate), read: readArticles.has(a.id) }));
+  autoArchiveRead();
   updateCounts();
   renderFeed();
-  setStatus(`${articles.length} artikelen uit cache — laden...`);
+  setStatus(`${articles.filter(a=>!a.read).length} ongelezen artikelen — laden...`);
 }
 // Then refresh feeds in background
 if (feeds.length > 0) setTimeout(refreshFeeds, articleCache.length ? 800 : 100);
